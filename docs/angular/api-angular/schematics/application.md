@@ -5,11 +5,11 @@ Create an Angular application
 ## Usage
 
 ```bash
-ng generate application ...
+nx generate application ...
 ```
 
 ```bash
-ng g app ... # same
+nx g app ... # same
 ```
 
 By default, Nx will search for `application` in the default collection provisioned in `angular.json`.
@@ -17,13 +17,13 @@ By default, Nx will search for `application` in the default collection provision
 You can specify the collection explicitly as follows:
 
 ```bash
-ng g @nrwl/angular:application ...
+nx g @nrwl/angular:application ...
 ```
 
 Show what will be generated without writing to disk:
 
 ```bash
-ng g application ... --dry-run
+nx g application ... --dry-run
 ```
 
 ## Options
@@ -52,11 +52,11 @@ Test runner to use for end to end (e2e) tests
 
 ### enableIvy
 
-Default: `false`
+Default: `true`
 
 Type: `boolean`
 
-**EXPERIMENTAL** True to create a new app that uses the Ivy rendering engine.
+Create a new app that uses the Ivy rendering engine.
 
 ### inlineStyle
 
@@ -84,7 +84,7 @@ Default: `tslint`
 
 Type: `string`
 
-Possible values: `tslint`
+Possible values: `tslint`, `eslint`
 
 The tool to use for running lint checks.
 
@@ -135,6 +135,14 @@ Default: `false`
 Type: `boolean`
 
 Skip creating spec files.
+
+### strict
+
+Default: `false`
+
+Type: `boolean`
+
+Creates an application with stricter type checking and build optimization options.
 
 ### style
 

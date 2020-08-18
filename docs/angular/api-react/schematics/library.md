@@ -5,11 +5,11 @@ Create a library
 ## Usage
 
 ```bash
-ng generate library ...
+nx generate library ...
 ```
 
 ```bash
-ng g lib ... # same
+nx g lib ... # same
 ```
 
 By default, Nx will search for `library` in the default collection provisioned in `angular.json`.
@@ -17,13 +17,13 @@ By default, Nx will search for `library` in the default collection provisioned i
 You can specify the collection explicitly as follows:
 
 ```bash
-ng g @nrwl/react:library ...
+nx g @nrwl/react:library ...
 ```
 
 Show what will be generated without writing to disk:
 
 ```bash
-ng g library ... --dry-run
+nx g library ... --dry-run
 ```
 
 ### Examples
@@ -31,13 +31,13 @@ ng g library ... --dry-run
 Generate libs/myapp/mylib:
 
 ```bash
-ng g lib mylib --directory=myapp
+nx g lib mylib --directory=myapp
 ```
 
 Generate a library with routes and add them to myapp:
 
 ```bash
-ng g lib mylib --appProject=myapp
+nx g lib mylib --appProject=myapp
 ```
 
 ## Options
@@ -48,7 +48,23 @@ Alias(es): a
 
 Type: `string`
 
-The application project to add the library route to
+The application project to add the library route to.
+
+### buildable
+
+Default: `false`
+
+Type: `boolean`
+
+Generate a buildable library.
+
+### component
+
+Default: `true`
+
+Type: `boolean`
+
+Generate a default component.
 
 ### directory
 
@@ -56,7 +72,13 @@ Alias(es): d
 
 Type: `string`
 
-A directory where the app is placed
+A directory where the lib is placed.
+
+### importPath
+
+Type: `string`
+
+The library name used to import it, like @myorg/my-awesome-lib
 
 ### js
 
@@ -64,11 +86,11 @@ Default: `false`
 
 Type: `boolean`
 
-Generate JavaScript files rather than TypeScript files
+Generate JavaScript files rather than TypeScript files.
 
 ### linter
 
-Default: `tslint`
+Default: `eslint`
 
 Type: `string`
 
@@ -90,19 +112,19 @@ Default: `false`
 
 Type: `boolean`
 
-Use pascal case component file name (e.g. App.tsx)
+Use pascal case component file name (e.g. App.tsx).
 
 ### publishable
 
 Type: `boolean`
 
-Create a publishable library. A "build" architect will be added for this project the workspace configuration.
+Create a publishable library.
 
 ### routing
 
 Type: `boolean`
 
-Generate library with routes
+Generate library with routes.
 
 ### skipFormat
 
@@ -110,7 +132,7 @@ Default: `false`
 
 Type: `boolean`
 
-Skip formatting files
+Skip formatting files.
 
 ### skipTsConfig
 
@@ -128,7 +150,7 @@ Default: `css`
 
 Type: `string`
 
-Possible values: `css`, `scss`, `styl`, `less`, `styled-components`, `@emotion/styled`
+Possible values: `css`, `scss`, `styl`, `less`, `styled-components`, `@emotion/styled`, `styled-jsx`, `none`
 
 The file extension to be used for style files.
 
@@ -138,7 +160,7 @@ Alias(es): t
 
 Type: `string`
 
-Add tags to the library (used for linting)
+Add tags to the library (used for linting).
 
 ### unitTestRunner
 
@@ -148,4 +170,4 @@ Type: `string`
 
 Possible values: `jest`, `none`
 
-Test runner to use for unit tests
+Test runner to use for unit tests.

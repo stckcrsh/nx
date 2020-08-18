@@ -2,57 +2,47 @@ import {
   BuilderContext,
   BuilderOutput,
   createBuilder,
+  scheduleTargetAndForget,
   targetFromTargetString,
-  scheduleTargetAndForget
 } from '@angular-devkit/architect';
-import { JsonObject } from '@angular-devkit/core';
-import { PHASE_EXPORT } from 'next/dist/next-server/lib/constants';
 import exportApp from 'next/dist/export';
+import { PHASE_EXPORT } from 'next/dist/next-server/lib/constants';
 import * as path from 'path';
 import { from, Observable, of } from 'rxjs';
-import { map, concatMap } from 'rxjs/operators';
+import { concatMap, map } from 'rxjs/operators';
 import { prepareConfig } from '../../utils/config';
+import {
+  NextBuildBuilderOptions,
+  NextExportBuilderOptions,
+} from '../../utils/types';
 
 try {
   require('dotenv').config();
 } catch (e) {}
 
-export interface NextBuildBuilderOptions extends JsonObject {
-  buildTarget: string;
-  silent: boolean;
-  threads: number;
-  concurrency: number;
-}
-
-export default createBuilder<NextBuildBuilderOptions>(run);
+export default createBuilder<NextExportBuilderOptions>(run);
 
 function run(
-  options: NextBuildBuilderOptions,
+  options: NextExportBuilderOptions,
   context: BuilderContext
 ): Observable<BuilderOutput> {
   const buildTarget = targetFromTargetString(options.buildTarget);
   const build$ = scheduleTargetAndForget(context, buildTarget);
 
   return build$.pipe(
-    concatMap(r => {
+    concatMap((r) => {
       if (!r.success) return of(r);
       return from(context.getTargetOptions(buildTarget)).pipe(
-        concatMap((buildOptions: any) => {
+        concatMap((buildOptions: NextBuildBuilderOptions) => {
           const root = path.resolve(context.workspaceRoot, buildOptions.root);
-          const config = prepareConfig(
-            context.workspaceRoot,
-            buildOptions.root,
-            buildOptions.outputPath,
-            PHASE_EXPORT
-          );
+          const config = prepareConfig(PHASE_EXPORT, buildOptions, context);
           return from(
             exportApp(
               root,
               {
                 silent: options.silent,
                 threads: options.threads,
-                concurrency: options.concurrency,
-                outdir: `${buildOptions.outputPath}/exported`
+                outdir: `${buildOptions.outputPath}/exported`,
               } as any,
               config
             )

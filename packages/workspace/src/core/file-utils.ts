@@ -1,21 +1,23 @@
-import * as path from 'path';
-import * as fs from 'fs';
-import { appRootPath } from '../utils/app-root';
-import { extname } from 'path';
-import { jsonDiff } from '../utils/json-diff';
-import { readFileSync } from 'fs';
 import { execSync } from 'child_process';
-import { readJsonFile } from '../utils/fileutils';
-import { Environment, NxJson } from './shared-interfaces';
-import { ProjectGraphNode } from './project-graph';
-import { WorkspaceResults } from '../command-line/workspace-results';
+import * as fs from 'fs';
+import { readFileSync } from 'fs';
+import * as path from 'path';
+import { extname } from 'path';
 import { NxArgs } from '../command-line/utils';
+import { WorkspaceResults } from '../command-line/workspace-results';
+import { appRootPath } from '../utils/app-root';
+import { fileExists, readJsonFile } from '../utils/fileutils';
+import { jsonDiff } from '../utils/json-diff';
+import { ProjectGraphNode } from './project-graph';
+import { Environment, NxJson } from './shared-interfaces';
+import { defaultFileHasher } from './hasher/file-hasher';
+import { performance } from 'perf_hooks';
 
 const ignore = require('ignore');
 
 export interface FileData {
   file: string;
-  mtime: number;
+  hash: string;
   ext: string;
 }
 
@@ -41,17 +43,21 @@ export function calculateFileChanges(
   readFileAtRevision: (
     f: string,
     r: void | string
-  ) => string = defaultReadFileAtRevision
+  ) => string = defaultReadFileAtRevision,
+  ignore = getIgnoredGlobs()
 ): FileChange[] {
-  return files.map(f => {
+  if (ignore) {
+    files = files.filter((f) => !ignore.ignores(f));
+  }
+
+  return files.map((f) => {
     const ext = extname(f);
-    const _mtime = mtime(`${appRootPath}/${f}`);
-    // Memoize results so we don't recalculate on successive invocation.
+    const hash = defaultFileHasher.hashFile(f);
 
     return {
       file: f,
       ext,
-      mtime: _mtime,
+      hash,
       getChanges: (): Change[] => {
         if (!nxArgs) {
           return [new WholeFileChange()];
@@ -73,7 +79,7 @@ export function calculateFileChanges(
           default:
             return [new WholeFileChange()];
         }
-      }
+      },
     };
   });
 }
@@ -85,16 +91,33 @@ function defaultReadFileAtRevision(
   revision: void | string
 ): string {
   try {
+    const fileFullPath = `${appRootPath}${path.sep}${file}`;
+    const gitRepositoryPath = execSync('git rev-parse --show-toplevel')
+      .toString()
+      .trim();
+    const filePathInGitRepository = path
+      .relative(gitRepositoryPath, fileFullPath)
+      .split(path.sep)
+      .join('/');
     return !revision
       ? readFileSync(file).toString()
-      : execSync(`git show ${revision}:${file}`, {
-          maxBuffer: TEN_MEGABYTES
+      : execSync(`git show ${revision}:${filePathInGitRepository}`, {
+          maxBuffer: TEN_MEGABYTES,
         })
           .toString()
           .trim();
   } catch {
     return '';
   }
+}
+
+function getFileData(filePath: string): FileData {
+  const file = path.relative(appRootPath, filePath).split(path.sep).join('/');
+  return {
+    file: file,
+    hash: defaultFileHasher.hashFile(filePath),
+    ext: path.extname(filePath),
+  };
 }
 
 export function allFilesInDir(
@@ -109,7 +132,7 @@ export function allFilesInDir(
 
   let res = [];
   try {
-    fs.readdirSync(dirName).forEach(c => {
+    fs.readdirSync(dirName).forEach((c) => {
       const child = path.join(dirName, c);
       if (ignoredGlobs.ignores(path.relative(appRootPath, child))) {
         return;
@@ -118,14 +141,7 @@ export function allFilesInDir(
         const s = fs.statSync(child);
         if (!s.isDirectory()) {
           // add starting with "apps/myapp/..." or "libs/mylib/..."
-          res.push({
-            file: path
-              .relative(appRootPath, child)
-              .split(path.sep)
-              .join('/'),
-            ext: path.extname(child),
-            mtime: s.mtimeMs
-          });
+          res.push(getFileData(child));
         } else if (s.isDirectory() && recurse) {
           res = [...res, ...allFilesInDir(child)];
         }
@@ -155,11 +171,7 @@ export function cliCommand() {
 }
 
 export function workspaceFileName() {
-  const packageJson = readPackageJson();
-  if (
-    packageJson.devDependencies['@angular/cli'] ||
-    packageJson.dependencies['@angular/cli']
-  ) {
+  if (fileExists(`${appRootPath}/angular.json`)) {
     return 'angular.json';
   } else {
     return 'workspace.json';
@@ -182,50 +194,95 @@ export function readNxJson(): NxJson {
   return config;
 }
 
+export function workspaceLayout(): { appsDir: string; libsDir: string } {
+  const nxJson = readNxJson();
+  const appsDir =
+    (nxJson.workspaceLayout && nxJson.workspaceLayout.appsDir) || 'apps';
+  const libsDir =
+    (nxJson.workspaceLayout && nxJson.workspaceLayout.libsDir) || 'libs';
+  return { appsDir, libsDir };
+}
+
+// TODO: Make this list extensible
+export function rootWorkspaceFileNames(): string[] {
+  return [`package.json`, workspaceFileName(), `nx.json`, `tsconfig.base.json`];
+}
+
+export function rootWorkspaceFileData(): FileData[] {
+  return rootWorkspaceFileNames().map((f) =>
+    getFileData(`${appRootPath}/${f}`)
+  );
+}
+
 export function readWorkspaceFiles(): FileData[] {
   const workspaceJson = readWorkspaceJson();
-  const files = [];
+  performance.mark('read workspace files:start');
 
-  // Add known workspace files and directories
-  files.push(...allFilesInDir(appRootPath, false));
-  files.push(...allFilesInDir(`${appRootPath}/tools`));
+  if (defaultFileHasher.usesGitForHashing) {
+    const r = defaultFileHasher
+      .allFiles()
+      .map((f) => getFileData(`${appRootPath}/${f}`));
+    performance.mark('read workspace files:end');
+    performance.measure(
+      'read workspace files',
+      'read workspace files:start',
+      'read workspace files:end'
+    );
+    r.sort((x, y) => x.file.localeCompare(y.file));
+    return r;
+  } else {
+    const r = [];
+    r.push(...rootWorkspaceFileData());
 
-  // Add files for workspace projects
-  Object.keys(workspaceJson.projects).forEach(projectName => {
-    const project = workspaceJson.projects[projectName];
-    files.push(...allFilesInDir(`${appRootPath}/${project.root}`));
-  });
-
-  return files;
+    // Add known workspace files and directories
+    r.push(...allFilesInDir(appRootPath, false));
+    r.push(...allFilesInDir(`${appRootPath}/tools`));
+    const wl = workspaceLayout();
+    r.push(...allFilesInDir(`${appRootPath}/${wl.appsDir}`));
+    if (wl.appsDir !== wl.libsDir) {
+      r.push(...allFilesInDir(`${appRootPath}/${wl.libsDir}`));
+    }
+    performance.mark('read workspace files:end');
+    performance.measure(
+      'read workspace files',
+      'read workspace files:start',
+      'read workspace files:end'
+    );
+    r.sort((x, y) => x.file.localeCompare(y.file));
+    return r;
+  }
 }
 
-export function readEnvironment(target: string): Environment {
+export function readEnvironment(
+  target: string,
+  projects: Record<string, ProjectGraphNode>
+): Environment {
   const nxJson = readNxJson();
   const workspaceJson = readWorkspaceJson();
-  const workspace = new WorkspaceResults(target);
+  const workspaceResults = new WorkspaceResults(target, projects);
 
-  return { nxJson, workspaceJson, workspace };
-}
-
-/**
- * Returns the time when file was last modified
- * Returns -Infinity for a non-existent file
- */
-export function mtime(filePath: string): number {
-  if (!fs.existsSync(filePath)) {
-    return -Infinity;
-  }
-  return fs.statSync(filePath).mtimeMs;
+  return { nxJson, workspaceJson, workspaceResults };
 }
 
 export function normalizedProjectRoot(p: ProjectGraphNode): string {
   if (p.data && p.data.root) {
-    return p.data.root
-      .split('/')
-      .filter(v => !!v)
-      .slice(1)
-      .join('/');
+    const path = p.data.root.split('/').filter((v) => !!v);
+    if (path.length === 1) {
+      return path[0];
+    }
+    // Remove the first part of the path, usually 'libs'
+    return path.slice(1).join('/');
   } else {
     return '';
   }
+}
+
+export function filesChanged(a: FileData[], b: FileData[]) {
+  if (a.length !== b.length) return true;
+
+  for (let i = 0; i < a.length; ++i) {
+    if (a[i].file !== b[i].file) return true;
+    if (a[i].hash !== b[i].hash) return true;
+  }
+  return false;
 }

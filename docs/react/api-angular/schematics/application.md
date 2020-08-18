@@ -52,11 +52,11 @@ Test runner to use for end to end (e2e) tests
 
 ### enableIvy
 
-Default: `false`
+Default: `true`
 
 Type: `boolean`
 
-**EXPERIMENTAL** True to create a new app that uses the Ivy rendering engine.
+Create a new app that uses the Ivy rendering engine.
 
 ### inlineStyle
 
@@ -84,7 +84,7 @@ Default: `tslint`
 
 Type: `string`
 
-Possible values: `tslint`
+Possible values: `tslint`, `eslint`
 
 The tool to use for running lint checks.
 
@@ -135,6 +135,14 @@ Default: `false`
 Type: `boolean`
 
 Skip creating spec files.
+
+### strict
+
+Default: `false`
+
+Type: `boolean`
+
+Creates an application with stricter type checking and build optimization options.
 
 ### style
 

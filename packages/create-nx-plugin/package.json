@@ -1,0 +1,36 @@
+{
+  "name": "create-nx-plugin",
+  "version": "0.0.1",
+  "description": "Extensible Dev Tools for Monorepos",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nrwl/nx.git"
+  },
+  "keywords": [
+    "Monorepo",
+    "Angular",
+    "React",
+    "Web",
+    "Node",
+    "Nest",
+    "Jest",
+    "Cypress",
+    "CLI"
+  ],
+  "bin": {
+    "create-nx-plugin": "./bin/create-nx-plugin.js"
+  },
+  "author": "Victor Savkin",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/nrwl/nx/issues"
+  },
+  "homepage": "https://nx.dev",
+  "dependencies": {
+    "@nrwl/workspace": "*",
+    "tmp": "0.0.33",
+    "yargs-parser": "10.0.0",
+    "yargs": "^11.0.0",
+    "inquirer": "^6.3.1"
+  }
+}

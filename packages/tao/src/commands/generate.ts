@@ -3,39 +3,45 @@ import {
   JsonObject,
   logging,
   normalize,
+  Path,
   schema,
   tags,
   terminal,
-  virtualFs
+  virtualFs,
 } from '@angular-devkit/core';
 import { NodeJsSyncHost } from '@angular-devkit/core/node';
 import {
   DryRunEvent,
   formats,
   HostTree,
-  Schematic
+  Schematic,
 } from '@angular-devkit/schematics';
 import {
+  FileSystemCollectionDescription,
+  FileSystemSchematicDescription,
   NodeWorkflow,
-  validateOptionsWithSchema
+  validateOptionsWithSchema,
 } from '@angular-devkit/schematics/tools';
 import * as fs from 'fs';
 import * as inquirer from 'inquirer';
+import * as minimist from 'minimist';
 import { detectPackageManager } from '../shared/detect-package-manager';
 import { getLogger } from '../shared/logger';
 import {
+  coerceTypes,
+  convertAliases,
   convertToCamelCase,
   handleErrors,
+  lookupUnmatched,
+  Options,
   Schema,
-  validateOptions
 } from '../shared/params';
 import { commandName, printHelp } from '../shared/print-help';
-import minimist = require('minimist');
 
 interface GenerateOptions {
   collectionName: string;
   schematicName: string;
-  schematicOptions: { [k: string]: string };
+  schematicOptions: Options;
   help: boolean;
   debug: boolean;
   dryRun: boolean;
@@ -59,29 +65,35 @@ function parseGenerateOpts(
     minimist(args, {
       boolean: ['help', 'dryRun', 'debug', 'force', 'interactive'],
       alias: {
-        dryRun: 'dry-run'
+        dryRun: 'dry-run',
+        d: 'dryRun',
       },
       default: {
         debug: false,
         dryRun: false,
-        interactive: true
-      }
+        interactive: true,
+      },
     })
   );
 
-  let collectionName = null;
-  let schematicName = null;
+  let collectionName: string | null = null;
+  let schematicName: string | null = null;
   if (mode === 'generate') {
-    if (!schematicOptions['_'] || schematicOptions['_'].length === 0) {
+    if (
+      !schematicOptions['_'] ||
+      (schematicOptions['_'] as string[]).length === 0
+    ) {
       throwInvalidInvocation();
     }
-    [collectionName, schematicName] = schematicOptions['_'].shift()!.split(':');
+    [collectionName, schematicName] = (schematicOptions['_'] as string[])
+      .shift()
+      .split(':');
     if (!schematicName) {
       schematicName = collectionName;
       collectionName = defaultCollection;
     }
   } else {
-    collectionName = schematicOptions.collection;
+    collectionName = schematicOptions.collection as string;
     schematicName = '';
   }
 
@@ -93,25 +105,40 @@ function parseGenerateOpts(
     collectionName,
     schematicName,
     schematicOptions,
-    help: schematicOptions.help,
-    debug: schematicOptions.debug,
-    dryRun: schematicOptions.dryRun,
-    force: schematicOptions.force,
-    interactive: schematicOptions.interactive,
-    defaults: schematicOptions.defaults
+    help: schematicOptions.help as boolean,
+    debug: schematicOptions.debug as boolean,
+    dryRun: schematicOptions.dryRun as boolean,
+    force: schematicOptions.force as boolean,
+    interactive: schematicOptions.interactive as boolean,
+    defaults: schematicOptions.defaults as boolean,
   };
 
   delete schematicOptions.debug;
+  delete schematicOptions.d;
   delete schematicOptions.dryRun;
   delete schematicOptions.force;
   delete schematicOptions.interactive;
   delete schematicOptions.defaults;
   delete schematicOptions.help;
   delete schematicOptions['--'];
+
   return res;
 }
 
-function createRecorder(record: any, logger: logging.Logger) {
+function normalizeOptions(opts: Options, schema: Schema): Options {
+  return lookupUnmatched(
+    convertAliases(coerceTypes(opts, schema), schema, true),
+    schema
+  );
+}
+
+function createRecorder(
+  record: {
+    loggingQueue: string[];
+    error: boolean;
+  },
+  logger: logging.Logger
+) {
   return (event: DryRunEvent) => {
     const eventPath = event.path.startsWith('/')
       ? event.path.substr(1)
@@ -147,6 +174,10 @@ function createRecorder(record: any, logger: logging.Logger) {
   };
 }
 
+function isTTY(): boolean {
+  return !!process.stdout.isTTY && process.env['CI'] !== 'true';
+}
+
 async function createWorkflow(
   fsHost: virtualFs.Host<fs.Stats>,
   root: string,
@@ -157,7 +188,8 @@ async function createWorkflow(
     dryRun: opts.dryRun,
     packageManager: await detectPackageManager(fsHost),
     root: normalize(root),
-    registry: new schema.CoreSchemaRegistry(formats.standardFormats)
+    registry: new schema.CoreSchemaRegistry(formats.standardFormats),
+    resolvePaths: [process.cwd(), root],
   });
   const _params = opts.schematicOptions._;
   delete opts.schematicOptions._;
@@ -181,44 +213,50 @@ async function createWorkflow(
 
   if (opts.interactive !== false && isTTY()) {
     workflow.registry.usePromptProvider(
-      (definitions: Array<schema.PromptDefinition>) => {
-        const questions: inquirer.Questions = definitions.map(definition => {
-          const question = {
-            name: definition.id,
-            message: definition.message,
-            default: definition.default as any
-          } as any;
+      (definitions: schema.PromptDefinition[]) => {
+        const questions: inquirer.QuestionCollection = definitions.map(
+          (definition) => {
+            const question = {
+              name: definition.id,
+              message: definition.message,
+              default: definition.default as
+                | string
+                | number
+                | boolean
+                | string[],
+            } as inquirer.Question;
 
-          const validator = definition.validator;
-          if (validator) {
-            question.validate = (input: any) => validator(input);
-          }
+            const validator = definition.validator;
+            if (validator) {
+              question.validate = (input) => validator(input);
+            }
 
-          switch (definition.type) {
-            case 'confirmation':
-              question.type = 'confirm';
-              break;
-            case 'list':
-              question.type = !!definition.multiselect ? 'checkbox' : 'list';
-              question.choices =
-                definition.items &&
-                definition.items.map(item => {
-                  if (typeof item == 'string') {
-                    return item;
-                  } else {
-                    return {
-                      name: item.label,
-                      value: item.value
-                    };
-                  }
-                });
-              break;
-            default:
-              question.type = definition.type;
-              break;
+            switch (definition.type) {
+              case 'confirmation':
+                question.type = 'confirm';
+                break;
+              case 'list':
+                question.type = definition.multiselect ? 'checkbox' : 'list';
+                question.choices =
+                  definition.items &&
+                  definition.items.map((item) => {
+                    if (typeof item == 'string') {
+                      return item;
+                    } else {
+                      return {
+                        name: item.label,
+                        value: item.value,
+                      };
+                    }
+                  });
+                break;
+              default:
+                question.type = definition.type;
+                break;
+            }
+            return question;
           }
-          return question;
-        });
+        );
 
         return inquirer.prompt(questions);
       }
@@ -244,8 +282,12 @@ function printGenHelp(
       ...schema,
       properties: {
         ...schema.properties,
-        dryRun: `Runs through and reports activity without writing to disk.`
-      }
+        dryRun: {
+          type: 'boolean',
+          default: false,
+          description: `Runs through and reports activity without writing to disk.`,
+        },
+      },
     },
     logger
   );
@@ -257,10 +299,10 @@ async function getSchematicDefaults(
   schematic: string
 ) {
   const workspace = await new experimental.workspace.Workspace(
-    normalize(root) as any,
+    normalize(root) as Path,
     new NodeJsSyncHost()
   )
-    .loadWorkspaceFromHost('workspace.json' as any)
+    .loadWorkspaceFromHost('workspace.json' as Path)
     .toPromise();
 
   let result = {};
@@ -287,15 +329,18 @@ async function runSchematic(
   workflow: NodeWorkflow,
   logger: logging.Logger,
   opts: GenerateOptions,
-  schematic: Schematic<any, any>,
-  allowAdditionalArgs: boolean = false
+  schematic: Schematic<
+    FileSystemCollectionDescription,
+    FileSystemSchematicDescription
+  >,
+  allowAdditionalArgs = false
 ): Promise<number> {
   const flattenedSchema = (await workflow.registry
-    .flatten(schematic.description.schemaJson!)
+    .flatten(schematic.description.schemaJson)
     .toPromise()) as Schema;
 
   if (opts.help) {
-    printGenHelp(opts, flattenedSchema as any, logger);
+    printGenHelp(opts, flattenedSchema as Schema, logger);
     return 0;
   }
 
@@ -310,13 +355,13 @@ async function runSchematic(
   const record = { loggingQueue: [] as string[], error: false };
   workflow.reporter.subscribe(createRecorder(record, logger));
 
-  const schematicOptions = validateOptions(
+  const schematicOptions = normalizeOptions(
     opts.schematicOptions,
     flattenedSchema
   );
 
   if (schematicOptions['--'] && !allowAdditionalArgs) {
-    schematicOptions['--'].forEach(unmatched => {
+    schematicOptions['--'].forEach((unmatched) => {
       const message =
         `Could not match option '${unmatched.name}' to the ${opts.collectionName}:${opts.schematicName} schema.` +
         (unmatched.possible.length > 0
@@ -334,12 +379,12 @@ async function runSchematic(
       schematic: opts.schematicName,
       options: { ...defaults, ...schematicOptions },
       debug: opts.debug,
-      logger
+      logger,
     })
     .toPromise();
 
   if (!record.error) {
-    record.loggingQueue.forEach(log => logger.info(log));
+    record.loggingQueue.forEach((log) => logger.info(log));
   }
 
   if (opts.dryRun) {
@@ -348,10 +393,41 @@ async function runSchematic(
   return 0;
 }
 
+async function readDefaultCollection(host: virtualFs.Host<fs.Stats>) {
+  const workspaceJson = JSON.parse(
+    new HostTree(host).read('workspace.json').toString()
+  );
+  return workspaceJson.cli ? workspaceJson.cli.defaultCollection : null;
+}
+
+export async function taoNew(root: string, args: string[], isVerbose = false) {
+  const logger = getLogger(isVerbose);
+
+  return handleErrors(logger, isVerbose, async () => {
+    const fsHost = new virtualFs.ScopedHost(
+      new NodeJsSyncHost(),
+      normalize(root)
+    );
+    const opts = parseGenerateOpts(args, 'new', null);
+    const workflow = await createWorkflow(fsHost, root, opts);
+    const collection = getCollection(workflow, opts.collectionName);
+    const schematic = collection.createSchematic('tao-new', true);
+    const allowAdditionalArgs = true; // tao-new is a special case, we can't yet know the schema to validate against
+    return runSchematic(
+      root,
+      workflow,
+      logger,
+      { ...opts, schematicName: schematic.description.name },
+      schematic,
+      allowAdditionalArgs
+    );
+  });
+}
+
 export async function generate(
   root: string,
   args: string[],
-  isVerbose: boolean = false
+  isVerbose = false
 ) {
   const logger = getLogger(isVerbose);
 
@@ -377,43 +453,4 @@ export async function generate(
       schematic
     );
   });
-}
-
-async function readDefaultCollection(host: virtualFs.Host<any>) {
-  const workspaceJson = JSON.parse(
-    new HostTree(host).read('workspace.json')!.toString()
-  );
-  return workspaceJson.cli ? workspaceJson.cli.defaultCollection : null;
-}
-
-export async function taoNew(
-  root: string,
-  args: string[],
-  isVerbose: boolean = false
-) {
-  const logger = getLogger(isVerbose);
-
-  return handleErrors(logger, isVerbose, async () => {
-    const fsHost = new virtualFs.ScopedHost(
-      new NodeJsSyncHost(),
-      normalize(root)
-    );
-    const opts = parseGenerateOpts(args, 'new', null);
-    const workflow = await createWorkflow(fsHost, root, opts);
-    const collection = getCollection(workflow, opts.collectionName);
-    const schematic = collection.createSchematic('tao-new', true);
-    const allowAdditionalArgs = true; // tao-new is a special case, we can't yet know the schema to validate against
-    return runSchematic(
-      root,
-      workflow,
-      logger,
-      { ...opts, schematicName: schematic.description.name },
-      schematic,
-      allowAdditionalArgs
-    );
-  });
-}
-
-function isTTY(): boolean {
-  return !!process.stdout.isTTY && process.env['CI'] !== 'true';
 }

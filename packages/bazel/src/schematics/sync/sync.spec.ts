@@ -57,7 +57,6 @@ describe('@nrwl/bazel:sync', () => {
         yarn_install(
           # Name this npm so that Bazel Label references look like @npm//package
           name = "npm",
-          data = ["//patches"],
           package_json = "//:package.json",
           yarn_lock = "//:yarn.lock",
         )
@@ -88,7 +87,7 @@ describe('@nrwl/bazel:sync', () => {
            "workspace.json",
            "package.json",
            "nx.json",
-           "tsconfig.json",
+           "tsconfig.base.json",
            "tslint.json",
            
         ],
@@ -103,7 +102,7 @@ describe('@nrwl/bazel:sync', () => {
     beforeEach(async () => {
       tree = await callRule(
         chain([
-          updateWorkspace(workspace => {
+          updateWorkspace((workspace) => {
             workspace.projects.add({
               name: 'proj',
               root: 'proj',
@@ -112,21 +111,21 @@ describe('@nrwl/bazel:sync', () => {
                   builder: '@nrwl/web:build',
                   options: {},
                   configurations: {
-                    production: {}
-                  }
+                    production: {},
+                  },
                 },
                 serve: {
                   builder: '@nrwl/web:dev-server',
                   options: {},
                   configurations: {
-                    production: {}
-                  }
+                    production: {},
+                  },
                 },
                 test: {
                   builder: '@nrwl/jest:jest',
-                  options: {}
-                }
-              }
+                  options: {},
+                },
+              },
             });
             workspace.projects.add({
               name: 'proj2',
@@ -136,28 +135,28 @@ describe('@nrwl/bazel:sync', () => {
                   builder: '@angular-devkit/build-angular:browser',
                   options: {},
                   configurations: {
-                    production: {}
-                  }
+                    production: {},
+                  },
                 },
                 serve: {
                   builder: '@angular-devkit/build-angular:dev-server',
                   options: {},
                   configurations: {
-                    production: {}
-                  }
+                    production: {},
+                  },
                 },
                 test: {
                   builder: '@angular-devkit/build-angular:karma',
-                  options: {}
-                }
-              }
+                  options: {},
+                },
+              },
             });
           }),
-          updateJsonInTree<NxJson>('nx.json', json => {
+          updateJsonInTree<NxJson>('nx.json', (json) => {
             json.projects['proj'] = {};
             json.projects['proj2'] = {};
             return json;
-          })
+          }),
         ]),
         tree
       );

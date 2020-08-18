@@ -1,7 +1,7 @@
 import * as yargs from 'yargs';
 import { generateGraph } from './dep-graph';
 import { output } from '../utils/output';
-import { parseFiles, printArgsWarning } from './shared';
+import { parseFiles } from './shared';
 import { runCommand } from '../tasks-runner/run-command';
 import { NxArgs, splitArgsIntoNxArgsAndOverrides } from './utils';
 import { filterAffected } from '../core/affected-project-graph';
@@ -10,16 +10,22 @@ import {
   onlyWorkspaceProjects,
   ProjectGraphNode,
   ProjectType,
-  withDeps
+  withDeps,
 } from '../core/project-graph';
 import { calculateFileChanges, readEnvironment } from '../core/file-utils';
 import { printAffected } from './print-affected';
-import { projectHasTargetAndConfiguration } from '../utils/project-has-target-and-configuration';
+import { projectHasTarget } from '../utils/project-graph-utils';
+import { DefaultReporter } from '../tasks-runner/default-reporter';
 
 export function affected(command: string, parsedArgs: yargs.Arguments): void {
-  const { nxArgs, overrides } = splitArgsIntoNxArgsAndOverrides(parsedArgs);
+  const { nxArgs, overrides } = splitArgsIntoNxArgsAndOverrides(
+    parsedArgs,
+    'affected',
+    {
+      printWarnings: command !== 'print-affected' && !parsedArgs.plain,
+    }
+  );
 
-  const env = readEnvironment(nxArgs.target);
   const projectGraph = createProjectGraph();
   let affectedGraph = nxArgs.all
     ? projectGraph
@@ -32,26 +38,27 @@ export function affected(command: string, parsedArgs: yargs.Arguments): void {
       withDeps(projectGraph, Object.values(affectedGraph.nodes))
     );
   }
-  const affectedProjects = Object.values(
-    parsedArgs.all ? projectGraph.nodes : affectedGraph.nodes
-  )
-    .filter(n => !parsedArgs.exclude.includes(n.name))
-    .filter(n => !parsedArgs.onlyFailed || !env.workspace.getResult(n.name));
+  const projects = parsedArgs.all ? projectGraph.nodes : affectedGraph.nodes;
+  const env = readEnvironment(nxArgs.target, projects);
+  const affectedProjects = Object.values(projects)
+    .filter((n) => !parsedArgs.exclude.includes(n.name))
+    .filter(
+      (n) => !parsedArgs.onlyFailed || !env.workspaceResults.getResult(n.name)
+    );
 
   try {
     switch (command) {
       case 'apps':
         const apps = affectedProjects
-          .filter(p => p.type === ProjectType.app)
-          .map(p => p.name);
+          .filter((p) => p.type === ProjectType.app)
+          .map((p) => p.name);
         if (parsedArgs.plain) {
           console.log(apps.join(' '));
         } else {
-          printArgsWarning(nxArgs);
           if (apps.length) {
             output.log({
               title: 'Affected apps:',
-              bodyLines: apps.map(app => `${output.colors.gray('-')} ${app}`)
+              bodyLines: apps.map((app) => `${output.colors.gray('-')} ${app}`),
             });
           }
         }
@@ -59,35 +66,33 @@ export function affected(command: string, parsedArgs: yargs.Arguments): void {
 
       case 'libs':
         const libs = affectedProjects
-          .filter(p => p.type === ProjectType.lib)
-          .map(p => p.name);
+          .filter((p) => p.type === ProjectType.lib)
+          .map((p) => p.name);
         if (parsedArgs.plain) {
           console.log(libs.join(' '));
         } else {
-          printArgsWarning(nxArgs);
           if (libs.length) {
             output.log({
               title: 'Affected libs:',
-              bodyLines: libs.map(lib => `${output.colors.gray('-')} ${lib}`)
+              bodyLines: libs.map((lib) => `${output.colors.gray('-')} ${lib}`),
             });
           }
         }
         break;
 
       case 'dep-graph':
-        const projectNames = affectedProjects.map(p => p.name);
-        printArgsWarning(nxArgs);
+        const projectNames = affectedProjects.map((p) => p.name);
         generateGraph(parsedArgs as any, projectNames);
         break;
 
       case 'print-affected':
         if (nxArgs.target) {
-          const projectWithTargetAndConfig = allProjectsWithTargetAndConfiguration(
+          const projectsWithTarget = allProjectsWithTarget(
             affectedProjects,
             nxArgs
           );
           printAffected(
-            projectWithTargetAndConfig,
+            projectsWithTarget,
             affectedProjects,
             projectGraph,
             nxArgs,
@@ -99,17 +104,18 @@ export function affected(command: string, parsedArgs: yargs.Arguments): void {
         break;
 
       case 'affected': {
-        const projectWithTargetAndConfig = allProjectsWithTargetAndConfiguration(
+        const projectsWithTarget = allProjectsWithTarget(
           affectedProjects,
           nxArgs
         );
-        printArgsWarning(nxArgs);
         runCommand(
-          projectWithTargetAndConfig,
+          projectsWithTarget,
           projectGraph,
           env,
           nxArgs,
-          overrides
+          overrides,
+          new DefaultReporter(),
+          null
         );
         break;
       }
@@ -120,13 +126,8 @@ export function affected(command: string, parsedArgs: yargs.Arguments): void {
   }
 }
 
-function allProjectsWithTargetAndConfiguration(
-  projects: ProjectGraphNode[],
-  nxArgs: NxArgs
-) {
-  return projects.filter(p =>
-    projectHasTargetAndConfiguration(p, nxArgs.target, nxArgs.configuration)
-  );
+function allProjectsWithTarget(projects: ProjectGraphNode[], nxArgs: NxArgs) {
+  return projects.filter((p) => projectHasTarget(p, nxArgs.target));
 }
 
 function printError(e: any, verbose?: boolean) {
@@ -137,6 +138,6 @@ function printError(e: any, verbose?: boolean) {
   }
   output.error({
     title: 'There was a critical error when running your command',
-    bodyLines
+    bodyLines,
   });
 }

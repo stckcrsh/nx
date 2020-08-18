@@ -7,7 +7,7 @@ We would love for you to contribute to Nx! Read this document to see how to do i
 Watch this 5-minute video:
 
 <a href="https://www.youtube.com/watch?v=o11p0zSm0No&feature=youtu.be" target="_blank">
-<p align="center"><img src="https://raw.githubusercontent.com/nrwl/nx/master/how-to-contribute.png" width="600"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/nrwl/nx/master/images/how-to-contribute.png" width="600"></p>
 </a>
 
 ## Got a Question?
@@ -42,6 +42,33 @@ To build all the packages, run:
 yarn build
 ```
 
+## Publishing to a local registry
+
+To test if your changes will actually work once the changes are published,
+it can be useful to publish to a local registry.
+
+Check out [this video for a live walkthrough](https://youtu.be/Tx257WpNsxc) or follow the instructions below:
+
+```bash
+# Starts the local registry. Keep this running in a separate terminal.
+yarn local-registry start
+
+# Set npm and yarn to use the local registry.
+# Note: This reroutes your installs to your local registry
+yarn local-registry enable
+
+# Revert npm and yarn to use their default registries
+yarn local-registry disable
+```
+
+To publish packages to a local registry, do the following:
+
+- Run `yarn local-registry start` in Terminal 1 (keep it running)
+- Run `yarn local-registry enable` in Terminal 2
+- Run `yarn nx-release 999.9.9 --local` in Terminal 2
+- Run `cd /tmp` in Terminal 2
+- Run `npx create-nx-workspace@999.9.9` in Terminal 2
+
 ### Running Unit Tests
 
 To make sure your changes do not break any unit tests, run the following:
@@ -50,10 +77,10 @@ To make sure your changes do not break any unit tests, run the following:
 yarn test
 ```
 
-For example, if you need to only run the **jest-project/jest-project.spec.ts** test suite, provide a path to the specific spec file, run:
+For example, if you need to only run the tests for the jest package, run:
 
 ```bash
-yarn test jest/src/schematics/jest-project/jest-project
+nx test jest
 ```
 
 ### Running E2E Tests
@@ -67,29 +94,8 @@ yarn e2e
 Running E2E tests can take some time, so it is often useful to run a single test. To run a single suite of tests, run:
 
 ```bash
-yarn e2e affected
+yarn e2e e2e-cli
 ```
-
-The `yarn e2e` command is going to remove the `tmp` folder and will recreate the sandbox from scratch. This can take a long time. If you are working on the same e2e test, you can use `yarn e2e-rerun affected`, which is significantly faster.
-
-### Playground
-
-While developing you may want to try out the changes you have made. The easier way to do it is to run:
-
-```bash
-yarn create-playground
-```
-
-You can then go to `tmp/nx` (this is set up to use Nx CLI) or `tmp/angular` (this is set up to use Angular CLI), where you will find an empty workspace with your changes in it, something this that:
-
-```bash
-yarn create-playground
-cd tmp/nx
-nx g @nrwl/express:app backend
-nx build backend
-```
-
-You can fix the changed files in `tmp/nx/node_modules/@nrwl/...` and `tmp/angular/node_modules/@nrwl/...`.
 
 ### Developing on Windows
 
@@ -160,8 +166,11 @@ The scope must be one of the following:
 - core - anything Nx core specific
 - docs - anything related to docs infrastructure
 - nextjs - anything Next specific
+- nest - anything Nest specific
 - node - anything Node specific
+- linter - anything Linter specific
 - react - anything React specific
+- web - anything Web specific
 - storybook - anything Storybook specific
 - testing - anything testing specific (e.g., jest or cypress)
 - repo - anything related to managing the repo itself

@@ -9,9 +9,19 @@
       "type": "string",
       "description": "Npm scope for importing libs."
     },
+    "defaultBase": {
+      "type": "string",
+      "description": "Default base branch for affected.",
+      "default": "master"
+    },
     "skipInstall": {
       "type": "boolean",
       "description": "Skip installing after adding @nrwl/workspace",
+      "default": false
+    },
+    "preserveAngularCLILayout": {
+      "type": "boolean",
+      "description": "Preserve the Angular CLI layout instead of moving the app into apps.",
       "default": false
     },
     "name": {

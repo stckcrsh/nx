@@ -1,59 +1,43 @@
-import { Rule, chain } from '@angular-devkit/schematics';
+import { chain, noop, Rule, Tree } from '@angular-devkit/schematics';
 import {
-  updateJsonInTree,
   addPackageWithInit,
-  formatFiles
+  formatFiles,
+  setDefaultCollection,
+  updateJsonInTree,
 } from '@nrwl/workspace';
-import { addDepsToPackageJson } from '@nrwl/workspace';
 import { Schema } from './schema';
 import {
+  documentRegisterElementVersion,
   nxVersion,
-  documentRegisterElementVersion
 } from '../../utils/versions';
-import { updateWorkspace } from '@nrwl/workspace';
-import { JsonObject } from '@angular-devkit/core';
+import { initRootBabelConfig } from '../../utils/rules';
 
-function addDependencies(): Rule {
-  return addDepsToPackageJson(
-    {
-      'document-register-element': documentRegisterElementVersion
-    },
-    {
-      '@nrwl/web': nxVersion
-    }
-  );
-}
-
-function moveDependency(): Rule {
-  return updateJsonInTree('package.json', json => {
-    json.dependencies = json.dependencies || {};
-
+function updateDependencies(): Rule {
+  return updateJsonInTree('package.json', (json) => {
     delete json.dependencies['@nrwl/web'];
+    json.dependencies = {
+      ...json.dependencies,
+      'document-register-element': documentRegisterElementVersion,
+    };
+    json.devDependencies = {
+      ...json.devDependencies,
+      '@nrwl/web': nxVersion,
+    };
     return json;
   });
 }
 
-function setDefault(): Rule {
-  return updateWorkspace(workspace => {
-    workspace.extensions.cli = workspace.extensions.cli || {};
-
-    const defaultCollection: string =
-      workspace.extensions.cli &&
-      ((workspace.extensions.cli as JsonObject).defaultCollection as string);
-
-    if (!defaultCollection || defaultCollection === '@nrwl/workspace') {
-      (workspace.extensions.cli as JsonObject).defaultCollection = '@nrwl/web';
-    }
-  });
-}
-
-export default function(schema: Schema) {
+export default function (schema: Schema) {
   return chain([
-    setDefault(),
-    addPackageWithInit('@nrwl/jest'),
-    addPackageWithInit('@nrwl/cypress'),
-    addDependencies(),
-    moveDependency(),
-    formatFiles(schema)
+    setDefaultCollection('@nrwl/web'),
+    schema.unitTestRunner === 'jest'
+      ? addPackageWithInit('@nrwl/jest')
+      : noop(),
+    schema.e2eTestRunner === 'cypress'
+      ? addPackageWithInit('@nrwl/cypress')
+      : noop(),
+    updateDependencies(),
+    initRootBabelConfig(),
+    formatFiles(schema),
   ]);
 }

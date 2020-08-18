@@ -5,11 +5,11 @@ Create a library
 ## Usage
 
 ```bash
-ng generate library ...
+nx generate library ...
 ```
 
 ```bash
-ng g lib ... # same
+nx g lib ... # same
 ```
 
 By default, Nx will search for `library` in the default collection provisioned in `angular.json`.
@@ -17,13 +17,13 @@ By default, Nx will search for `library` in the default collection provisioned i
 You can specify the collection explicitly as follows:
 
 ```bash
-ng g @nrwl/workspace:library ...
+nx g @nrwl/workspace:library ...
 ```
 
 Show what will be generated without writing to disk:
 
 ```bash
-ng g library ... --dry-run
+nx g library ... --dry-run
 ```
 
 ### Examples
@@ -31,7 +31,7 @@ ng g library ... --dry-run
 Generate libs/myapp/mylib:
 
 ```bash
-ng g lib mylib --directory=myapp
+nx g lib mylib --directory=myapp
 ```
 
 ## Options
@@ -40,11 +40,17 @@ ng g lib mylib --directory=myapp
 
 Type: `string`
 
-A directory where the app is placed
+A directory where the lib is placed
+
+### importPath
+
+Type: `string`
+
+The library name used to import it, like @myorg/my-awesome-lib
 
 ### linter
 
-Default: `tslint`
+Default: `eslint`
 
 Type: `string`
 
@@ -79,6 +85,16 @@ Do not update tsconfig.json for development experience.
 Type: `string`
 
 Add tags to the library (used for linting)
+
+### testEnvironment
+
+Default: `jsdom`
+
+Type: `string`
+
+Possible values: `jsdom`, `node`
+
+The test environment to use if unitTestRunner is set to jest
 
 ### unitTestRunner
 

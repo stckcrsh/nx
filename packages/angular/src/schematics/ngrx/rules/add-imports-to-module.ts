@@ -5,7 +5,7 @@ import { insert } from '@nrwl/workspace';
 import { RequestContext } from './request-context';
 import {
   addImportToModule,
-  addProviderToModule
+  addProviderToModule,
 } from '../../../utils/ast-utils';
 import { Change, insertImport } from '@nrwl/workspace/src/utils/ast-utils';
 
@@ -70,7 +70,10 @@ export function addImportsToModule(context: RequestContext): Rule {
     const hasRouter = sourceText.indexOf('RouterModule') > -1;
     const hasNxModule = sourceText.includes('NxModule.forRoot()');
 
-    if (context.options.onlyEmptyRoot || context.options.minimal) {
+    if (
+      (context.options.onlyEmptyRoot || context.options.minimal) &&
+      context.options.root
+    ) {
       insert(host, modulePath, [
         addImport.apply(this, storeModule),
         addImport.apply(this, effectsModule),
@@ -82,20 +85,20 @@ export function addImportsToModule(context: RequestContext): Rule {
         ...addImportToModule(source, modulePath, devTools),
         ...(hasRouter
           ? addImportToModule(source, modulePath, storeRouterModule)
-          : [])
+          : []),
       ]);
     } else {
       let common = [
         addImport.apply(this, storeModule),
         addImport.apply(this, effectsModule),
         addImport(reducerImports, reducerPath, true),
-        addImport(effectsName, effectsPath)
+        addImport(effectsName, effectsPath),
       ];
       if (context.options.facade) {
         common = [
           ...common,
           addImport(facadeName, facadePath),
-          ...addProviderToModule(source, modulePath, `${facadeName}`)
+          ...addProviderToModule(source, modulePath, `${facadeName}`),
         ];
       }
 
@@ -115,13 +118,13 @@ export function addImportsToModule(context: RequestContext): Rule {
           ...(hasRouter
             ? addImportToModule(source, modulePath, storeRouterModule)
             : []),
-          ...addImportToModule(source, modulePath, storeForFeature)
+          ...addImportToModule(source, modulePath, storeForFeature),
         ]);
       } else {
         insert(host, modulePath, [
           ...common,
           ...addImportToModule(source, modulePath, storeForFeature),
-          ...addImportToModule(source, modulePath, effectsForFeature)
+          ...addImportToModule(source, modulePath, effectsForFeature),
         ]);
       }
     }

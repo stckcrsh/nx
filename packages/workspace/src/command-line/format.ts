@@ -1,14 +1,14 @@
 import { execSync } from 'child_process';
 import * as path from 'path';
 import * as resolve from 'resolve';
-import { getProjectRoots, parseFiles, printArgsWarning } from './shared';
+import { getProjectRoots, parseFiles } from './shared';
 import { fileExists } from '../utils/fileutils';
 import { output } from '../utils/output';
 import { createProjectGraph } from '../core/project-graph';
 import { filterAffected } from '../core/affected-project-graph';
 import { calculateFileChanges } from '../core/file-utils';
 import * as yargs from 'yargs';
-import { NxArgs } from './utils';
+import { NxArgs, splitArgsIntoNxArgsAndOverrides } from './utils';
 
 const PRETTIER_EXTENSIONS = [
   'ts',
@@ -20,39 +20,45 @@ const PRETTIER_EXTENSIONS = [
   'css',
   'html',
   'json',
-  'md'
+  'md',
+  'mdx',
 ];
 
 export function format(command: 'check' | 'write', args: yargs.Arguments) {
   let patterns: string[];
 
+  const { nxArgs } = splitArgsIntoNxArgsAndOverrides(args, 'affected');
+
   try {
-    patterns = getPatterns(args as any);
+    patterns = getPatterns({
+      ...args,
+      ...nxArgs,
+    } as any);
   } catch (e) {
     output.error({
       title: e.message,
       bodyLines: [
         `Pass the SHA range: ${output.bold(
-          `npm run format:${command} -- SHA1 SHA2`
+          `npm run format:${command} -- --base=SHA1 --head=SHA2`
         )}`,
         '',
         `Or pass the list of files: ${output.bold(
           `npm run format:${command} -- --files="libs/mylib/index.ts,libs/mylib2/index.ts"`
-        )}`
-      ]
+        )}`,
+      ],
     });
     process.exit(1);
   }
 
   // Chunkify the patterns array to prevent crashing the windows terminal
-  const chunkList: string[][] = chunkify(patterns, 70);
+  const chunkList: string[][] = chunkify(patterns, 50);
 
   switch (command) {
     case 'write':
-      chunkList.forEach(chunk => write(chunk));
+      chunkList.forEach((chunk) => write(chunk));
       break;
     case 'check':
-      chunkList.forEach(chunk => check(chunk));
+      chunkList.forEach((chunk) => check(chunk));
       break;
   }
 }
@@ -65,18 +71,17 @@ function getPatterns(args: NxArgs & { libsAndApps: boolean; _: string[] }) {
       return allFilesPattern;
     }
 
-    printArgsWarning(args);
     const p = parseFiles(args);
     let patterns = p.files
-      .filter(f => fileExists(f))
-      .filter(f =>
-        PRETTIER_EXTENSIONS.map(ext => '.' + ext).includes(path.extname(f))
+      .filter((f) => fileExists(f))
+      .filter((f) =>
+        PRETTIER_EXTENSIONS.map((ext) => '.' + ext).includes(path.extname(f))
       );
 
     const libsAndApp = args.libsAndApps;
     return libsAndApp
       ? getPatternsFromApps(patterns)
-      : patterns.map(f => `"${f}"`);
+      : patterns.map((f) => `"${f}"`);
   } catch (e) {
     return allFilesPattern;
   }
@@ -89,7 +94,9 @@ function getPatternsFromApps(affectedFiles: string[]): string[] {
     calculateFileChanges(affectedFiles)
   );
   const roots = getProjectRoots(Object.keys(affectedGraph.nodes));
-  return roots.map(root => `"${root}/**/*.{${PRETTIER_EXTENSIONS.join(',')}}"`);
+  return roots.map(
+    (root) => `"${root}/**/*.{${PRETTIER_EXTENSIONS.join(',')}}"`
+  );
 }
 
 function chunkify(target: string[], size: number): string[][] {
@@ -103,7 +110,7 @@ function chunkify(target: string[], size: number): string[][] {
 function write(patterns: string[]) {
   if (patterns.length > 0) {
     execSync(`node "${prettierPath()}" --write ${patterns.join(' ')}`, {
-      stdio: [0, 1, 2]
+      stdio: [0, 1, 2],
     });
   }
 }
@@ -114,7 +121,7 @@ function check(patterns: string[]) {
       execSync(
         `node "${prettierPath()}" --list-different ${patterns.join(' ')}`,
         {
-          stdio: [0, 1, 2]
+          stdio: [0, 1, 2],
         }
       );
     } catch (e) {

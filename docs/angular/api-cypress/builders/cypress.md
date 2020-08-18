@@ -16,8 +16,6 @@ Use this to pass directly the address of your distant server address with the po
 
 Type: `string`
 
-Possible values: `electron`, `chrome`, `chromium`, `canary`
-
 The browser to run tests in.
 
 ### ciBuildId
@@ -52,6 +50,12 @@ Type: `boolean`
 
 Whether or not the Cypress Test Runner will stay open after running tests in a spec file
 
+### group
+
+Type: `string`
+
+A named group for recorded runs in the Cypress dashboard.
+
 ### headless
 
 Default: `false`
@@ -59,6 +63,12 @@ Default: `false`
 Type: `boolean`
 
 Whether or not to open the Cypress application to run the tests. If set to 'true', will run in headless mode
+
+### ignoreTestFiles
+
+Type: `string`
+
+A String or Array of glob patterns used to ignore test files that would otherwise be shown in your list of tests. Cypress uses minimatch with the options: {dot: true, matchBase: true}. We suggest using https://globster.xyz to test what files would match.
 
 ### key
 
@@ -81,6 +91,18 @@ Default: `false`
 Type: `boolean`
 
 Whether or not Cypress should record the results of the tests
+
+### reporter
+
+Type: `string`
+
+The reporter used during cypress run
+
+### reporterOptions
+
+Type: `string`
+
+The reporter options used. Supported options depend on the reporter.
 
 ### spec
 

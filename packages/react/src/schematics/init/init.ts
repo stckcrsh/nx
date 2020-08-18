@@ -1,86 +1,68 @@
-import { chain, Rule } from '@angular-devkit/schematics';
+import { chain, noop, Rule } from '@angular-devkit/schematics';
+import { JsonObject } from '@angular-devkit/core';
 import {
-  addDepsToPackageJson,
-  updateJsonInTree,
   addPackageWithInit,
-  updateWorkspace
+  setDefaultCollection,
+  updateWorkspace,
+  addDepsToPackageJson,
 } from '@nrwl/workspace';
 import { Schema } from './schema';
 import {
-  reactVersion,
-  typesReactVersion,
-  typesReactDomVersion,
-  testingLibraryReactVersion,
   nxVersion,
-  reactDomVersion
+  reactDomVersion,
+  reactVersion,
+  testingLibraryReactVersion,
+  typesReactDomVersion,
+  typesReactVersion,
 } from '../../utils/versions';
-import { JsonObject } from '@angular-devkit/core';
-
-export function addDependencies(): Rule {
-  return addDepsToPackageJson(
-    {
-      react: reactVersion,
-      'react-dom': reactDomVersion
-    },
-    {
-      '@nrwl/react': nxVersion,
-      '@types/react': typesReactVersion,
-      '@types/react-dom': typesReactDomVersion,
-      '@testing-library/react': testingLibraryReactVersion
-    }
-  );
-}
-
-function moveDependency(): Rule {
-  return updateJsonInTree('package.json', json => {
-    json.dependencies = json.dependencies || {};
-
-    delete json.dependencies['@nrwl/react'];
-    return json;
-  });
-}
 
 function setDefault(): Rule {
-  return updateWorkspace(workspace => {
-    // Set workspace default collection to 'react' if not already set.
-    workspace.extensions.cli = workspace.extensions.cli || {};
-    const defaultCollection: string =
-      workspace.extensions.cli &&
-      ((workspace.extensions.cli as JsonObject).defaultCollection as string);
-
-    if (!defaultCollection || defaultCollection === '@nrwl/workspace') {
-      (workspace.extensions.cli as JsonObject).defaultCollection =
-        '@nrwl/react';
-    }
-
+  const updateReactWorkspace = updateWorkspace((workspace) => {
     // Also generate all new react apps with babel.
     workspace.extensions.schematics =
       jsonIdentity(workspace.extensions.schematics) || {};
     const reactSchematics =
       jsonIdentity(workspace.extensions.schematics['@nrwl/react']) || {};
+
     workspace.extensions.schematics = {
       ...workspace.extensions.schematics,
       '@nrwl/react': {
+        ...reactSchematics,
         application: {
           ...jsonIdentity(reactSchematics.application),
-          babel: true
-        }
-      }
+          babel: true,
+        },
+      },
     };
   });
+  return chain([setDefaultCollection('@nrwl/react'), updateReactWorkspace]);
 }
 
 function jsonIdentity(x: any): JsonObject {
   return x as JsonObject;
 }
 
-export default function(schema: Schema) {
+export default function (schema: Schema) {
   return chain([
     setDefault(),
-    addPackageWithInit('@nrwl/jest'),
-    addPackageWithInit('@nrwl/cypress'),
-    addPackageWithInit('@nrwl/web'),
-    addDependencies(),
-    moveDependency()
+    schema.unitTestRunner === 'jest'
+      ? addPackageWithInit('@nrwl/jest')
+      : noop(),
+    schema.e2eTestRunner === 'cypress'
+      ? addPackageWithInit('@nrwl/cypress')
+      : noop(),
+    addPackageWithInit('@nrwl/web', schema),
+    addDepsToPackageJson(
+      {
+        react: reactVersion,
+        'react-dom': reactDomVersion,
+      },
+      {
+        '@nrwl/react': nxVersion,
+        '@types/react': typesReactVersion,
+        '@types/react-dom': typesReactDomVersion,
+        '@testing-library/react': testingLibraryReactVersion,
+      }
+    ),
   ]);
 }

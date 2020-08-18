@@ -1,29 +1,31 @@
 import {
   chain,
-  Rule,
-  Tree,
-  noop,
   externalSchematic,
-  schematic
+  noop,
+  Rule,
+  schematic,
+  Tree,
 } from '@angular-devkit/schematics';
 import {
-  readJsonInTree,
   addDepsToPackageJson,
+  formatFiles,
+  readJsonInTree,
+  setDefaultCollection,
+  updateJsonInTree,
   updateWorkspace,
-  formatFiles
 } from '@nrwl/workspace';
 import {
-  angularVersion,
   angularDevkitVersion,
-  rxjsVersion
+  angularVersion,
+  jestPresetAngularVersion,
+  rxjsVersion,
 } from '../../utils/versions';
 import { Schema } from './schema';
-import { UnitTestRunner, E2eTestRunner } from '../../utils/test-runners';
-import { jestPresetAngularVersion } from '../../utils/versions';
-import { JsonObject } from '@angular-devkit/core';
+import { E2eTestRunner, UnitTestRunner } from '../../utils/test-runners';
+import { stripIndents } from '@angular-devkit/core/src/utils/literals';
 
-function updateDependencies(): Rule {
-  const deps = {
+const updateDependencies = addDepsToPackageJson(
+  {
     '@angular/animations': angularVersion,
     '@angular/common': angularVersion,
     '@angular/compiler': angularVersion,
@@ -32,19 +34,16 @@ function updateDependencies(): Rule {
     '@angular/platform-browser': angularVersion,
     '@angular/platform-browser-dynamic': angularVersion,
     '@angular/router': angularVersion,
-    'core-js': '^2.5.4',
     rxjs: rxjsVersion,
-    'zone.js': '^0.9.1'
-  };
-  const devDeps = {
+    'zone.js': '^0.10.2',
+  },
+  {
     '@angular/compiler-cli': angularVersion,
     '@angular/language-service': angularVersion,
     '@angular-devkit/build-angular': angularDevkitVersion,
-    codelyzer: '~5.0.1'
-  };
-
-  return addDepsToPackageJson(deps, devDeps);
-}
+    codelyzer: '~5.0.1',
+  }
+);
 
 export function addUnitTestRunner(
   options: Pick<Schema, 'unitTestRunner'>
@@ -57,7 +56,7 @@ export function addUnitTestRunner(
         addDepsToPackageJson(
           {},
           {
-            'jest-preset-angular': jestPresetAngularVersion
+            'jest-preset-angular': jestPresetAngularVersion,
           }
         ),
         (host: Tree) => {
@@ -70,10 +69,10 @@ export function addUnitTestRunner(
             'init',
             {},
             {
-              interactive: false
+              interactive: false,
             }
           );
-        }
+        },
       ]);
     default:
       return noop();
@@ -95,7 +94,7 @@ export function addE2eTestRunner(options: Pick<Schema, 'e2eTestRunner'>): Rule {
             'jasmine-core': '~2.99.1',
             'jasmine-spec-reporter': '~4.2.1',
             '@types/jasmine': '~2.8.6',
-            '@types/jasminewd2': '~2.0.3'
+            '@types/jasminewd2': '~2.0.3',
           }
         );
       };
@@ -110,7 +109,7 @@ export function addE2eTestRunner(options: Pick<Schema, 'e2eTestRunner'>): Rule {
           'ng-add',
           {},
           {
-            interactive: false
+            interactive: false,
           }
         );
       };
@@ -120,7 +119,7 @@ export function addE2eTestRunner(options: Pick<Schema, 'e2eTestRunner'>): Rule {
 }
 
 export function setDefaults(options: Schema): Rule {
-  return updateWorkspace(workspace => {
+  const updateAngularWorkspace = updateWorkspace((workspace) => {
     workspace.extensions.schematics = workspace.extensions.schematics || {};
 
     workspace.extensions.schematics['@nrwl/angular:application'] =
@@ -139,25 +138,33 @@ export function setDefaults(options: Schema): Rule {
     workspace.extensions.schematics['@nrwl/angular:library'].unitTestRunner =
       workspace.extensions.schematics['@nrwl/angular:library'].unitTestRunner ||
       options.unitTestRunner;
+  });
 
-    workspace.extensions.cli = workspace.extensions.cli || {};
-    const defaultCollection: string =
-      workspace.extensions.cli &&
-      ((workspace.extensions.cli as JsonObject).defaultCollection as string);
+  return chain([setDefaultCollection('@nrwl/angular'), updateAngularWorkspace]);
+}
 
-    if (!defaultCollection || defaultCollection === '@nrwl/workspace') {
-      (workspace.extensions.cli as JsonObject).defaultCollection =
-        '@nrwl/angular';
+function addPostinstall(): Rule {
+  return updateJsonInTree('package.json', (json, context) => {
+    json.scripts = json.scripts || {};
+    const command =
+      'ngcc --properties es2015 browser module main --first-only --create-ivy-entry-points';
+    if (!json.scripts.postinstall) {
+      json.scripts.postinstall = command;
+    } else if (!json.scripts.postinstall.includes('ngcc')) {
+      json.scripts.postinstall = `${json.scripts.postinstall} && ${command}`;
     }
+    return json;
   });
 }
 
-export default function(options: Schema): Rule {
+export default function (options: Schema): Rule {
   return chain([
     setDefaults(options),
-    updateDependencies(),
+    // TODO: Remove this when ngcc can be run in parallel
+    addPostinstall(),
+    updateDependencies,
     addUnitTestRunner(options),
     addE2eTestRunner(options),
-    formatFiles()
+    formatFiles(),
   ]);
 }

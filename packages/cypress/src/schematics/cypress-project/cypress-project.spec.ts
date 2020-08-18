@@ -1,7 +1,7 @@
 import { Tree } from '@angular-devkit/schematics';
 import { createEmptyWorkspace } from '@nrwl/workspace/testing';
 import { runSchematic } from '../../utils/testing';
-import { readJsonInTree, Linter } from '@nrwl/workspace';
+import { readJsonInTree, Linter, NxJson } from '@nrwl/workspace';
 
 describe('schematic:cypress-project', () => {
   let appTree: Tree;
@@ -51,21 +51,21 @@ describe('schematic:cypress-project', () => {
         builder: '@angular-devkit/build-angular:tslint',
         options: {
           tsConfig: ['apps/my-app-e2e/tsconfig.e2e.json'],
-          exclude: ['**/node_modules/**', '!apps/my-app-e2e/**']
-        }
+          exclude: ['**/node_modules/**', '!apps/my-app-e2e/**/*'],
+        },
       });
       expect(project.architect.e2e).toEqual({
         builder: '@nrwl/cypress:cypress',
         options: {
           cypressConfig: 'apps/my-app-e2e/cypress.json',
           devServerTarget: 'my-app:serve',
-          tsConfig: 'apps/my-app-e2e/tsconfig.e2e.json'
+          tsConfig: 'apps/my-app-e2e/tsconfig.e2e.json',
         },
         configurations: {
           production: {
-            devServerTarget: 'my-app:serve:production'
-          }
-        }
+            devServerTarget: 'my-app:serve:production',
+          },
+        },
       });
     });
 
@@ -82,10 +82,23 @@ describe('schematic:cypress-project', () => {
         builder: '@nrwl/linter:lint',
         options: {
           linter: 'eslint',
-          config: 'apps/my-app-e2e/.eslintrc',
           tsConfig: ['apps/my-app-e2e/tsconfig.e2e.json'],
-          exclude: ['**/node_modules/**', '!apps/my-app-e2e/**']
-        }
+          exclude: ['**/node_modules/**', '!apps/my-app-e2e/**/*'],
+        },
+      });
+    });
+
+    it('should update nx.json', async () => {
+      const tree = await runSchematic(
+        'cypress-project',
+        { name: 'my-app-e2e', project: 'my-app', linter: Linter.EsLint },
+        appTree
+      );
+
+      const nxJson = readJsonInTree<NxJson>(tree, 'nx.json');
+      expect(nxJson.projects['my-app-e2e']).toEqual({
+        tags: [],
+        implicitDependencies: ['my-app'],
       });
     });
 
@@ -107,7 +120,7 @@ describe('schematic:cypress-project', () => {
         video: true,
         videosFolder: '../../dist/cypress/apps/my-app-e2e/videos',
         screenshotsFolder: '../../dist/cypress/apps/my-app-e2e/screenshots',
-        chromeWebSecurity: false
+        chromeWebSecurity: false,
       });
     });
 
@@ -134,7 +147,7 @@ describe('schematic:cypress-project', () => {
             name: 'my-app-e2e',
             project: 'my-dir-my-app',
             directory: 'my-dir',
-            linter: Linter.TsLint
+            linter: Linter.TsLint,
           },
           appTree
         );
@@ -147,8 +160,8 @@ describe('schematic:cypress-project', () => {
           builder: '@angular-devkit/build-angular:tslint',
           options: {
             tsConfig: ['apps/my-dir/my-app-e2e/tsconfig.e2e.json'],
-            exclude: ['**/node_modules/**', '!apps/my-dir/my-app-e2e/**']
-          }
+            exclude: ['**/node_modules/**', '!apps/my-dir/my-app-e2e/**/*'],
+          },
         });
 
         expect(projectConfig.architect.e2e).toEqual({
@@ -156,13 +169,13 @@ describe('schematic:cypress-project', () => {
           options: {
             cypressConfig: 'apps/my-dir/my-app-e2e/cypress.json',
             devServerTarget: 'my-dir-my-app:serve',
-            tsConfig: 'apps/my-dir/my-app-e2e/tsconfig.e2e.json'
+            tsConfig: 'apps/my-dir/my-app-e2e/tsconfig.e2e.json',
           },
           configurations: {
             production: {
-              devServerTarget: 'my-dir-my-app:serve:production'
-            }
-          }
+              devServerTarget: 'my-dir-my-app:serve:production',
+            },
+          },
         });
       });
 
@@ -188,7 +201,7 @@ describe('schematic:cypress-project', () => {
           videosFolder: '../../../dist/cypress/apps/my-dir/my-app-e2e/videos',
           screenshotsFolder:
             '../../../dist/cypress/apps/my-dir/my-app-e2e/screenshots',
-          chromeWebSecurity: false
+          chromeWebSecurity: false,
         });
       });
 
@@ -206,6 +219,43 @@ describe('schematic:cypress-project', () => {
         expect(tsconfigJson.compilerOptions.outDir).toEqual(
           '../../../dist/out-tsc'
         );
+      });
+    });
+
+    describe('--project', () => {
+      describe('none', () => {
+        it('should not add any implicit dependencies', async () => {
+          const tree = await runSchematic(
+            'cypress-project',
+            { name: 'my-app-e2e' },
+            appTree
+          );
+
+          const nxJson = readJsonInTree(tree, 'nx.json');
+          expect(nxJson.projects['my-app-e2e']).toEqual({ tags: [] });
+        });
+      });
+    });
+
+    describe('--linter', () => {
+      describe('eslint', () => {
+        it('should add eslint-plugin-cypress', async () => {
+          const tree = await runSchematic(
+            'cypress-project',
+            { name: 'my-app-e2e', project: 'my-app', linter: Linter.EsLint },
+            appTree
+          );
+          const packageJson = readJsonInTree(tree, 'package.json');
+          const eslintrcJson = readJsonInTree(
+            tree,
+            'apps/my-app-e2e/.eslintrc'
+          );
+
+          expect(
+            packageJson.devDependencies['eslint-plugin-cypress']
+          ).toBeTruthy();
+          expect(eslintrcJson.extends).toContain('plugin:cypress/recommended');
+        });
       });
     });
   });

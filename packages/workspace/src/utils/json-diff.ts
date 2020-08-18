@@ -3,7 +3,7 @@ import { Change } from '../core/file-utils';
 export enum DiffType {
   Deleted = 'JsonPropertyDeleted',
   Added = 'JsonPropertyAdded',
-  Modified = 'JsonPropertyModified'
+  Modified = 'JsonPropertyModified',
 }
 
 export interface JsonChange extends Change {
@@ -29,9 +29,6 @@ export function jsonDiff(lhs: any, rhs: any): JsonChange[] {
 
   walkJsonTree(lhs, [], (path, lhsValue) => {
     seenInLhs.add(hashArray(path));
-    if (typeof lhsValue === 'object') {
-      return true;
-    }
     const rhsValue = getJsonValue(path, rhs);
     if (rhsValue === undefined) {
       result.push({
@@ -39,26 +36,23 @@ export function jsonDiff(lhs: any, rhs: any): JsonChange[] {
         path,
         value: {
           lhs: lhsValue,
-          rhs: undefined
-        }
+          rhs: undefined,
+        },
       });
-    } else if (lhsValue !== rhsValue) {
+    } else if (!deepEquals(lhsValue, rhsValue)) {
       result.push({
         type: DiffType.Modified,
         path,
         value: {
           lhs: lhsValue,
-          rhs: rhsValue
-        }
+          rhs: rhsValue,
+        },
       });
     }
-    return false;
+    return typeof lhsValue === 'object' || Array.isArray(lhsValue);
   });
 
   walkJsonTree(rhs, [], (path, rhsValue) => {
-    if (typeof rhsValue === 'object') {
-      return true;
-    }
     const addedInRhs = !seenInLhs.has(hashArray(path));
     if (addedInRhs) {
       result.push({
@@ -66,11 +60,11 @@ export function jsonDiff(lhs: any, rhs: any): JsonChange[] {
         path,
         value: {
           lhs: undefined,
-          rhs: rhsValue
-        }
+          rhs: rhsValue,
+        },
       });
-      return false;
     }
+    return typeof rhsValue === 'object' || Array.isArray(rhsValue);
   });
 
   return result;
@@ -85,8 +79,7 @@ export function walkJsonTree(
   if (!json || typeof json !== 'object') {
     return;
   }
-
-  Object.keys(json).forEach(key => {
+  Object.keys(json).forEach((key) => {
     const path = currPath.concat([key]);
     const shouldContinue = visitor(path, json[key]);
     if (shouldContinue) {
@@ -108,4 +101,33 @@ function getJsonValue(path: string[], json: any): void | any {
     }
   }
   return curr;
+}
+
+function deepEquals(a: any, b: any): boolean {
+  if (a === b) {
+    return true;
+  }
+
+  // Values do not need to be checked for deep equality and the above is false
+  if (
+    // Values are different types
+    typeof a !== typeof b ||
+    // Values are the same type but not an object or array
+    (typeof a !== 'object' && !Array.isArray(a)) ||
+    // Objects are the same type, objects or arrays, but do not have the same number of keys
+    Object.keys(a).length !== Object.keys(b).length
+  ) {
+    return false;
+  }
+
+  // Values need to be checked for deep equality
+  return Object.entries(a).reduce((equal, [key, aValue]) => {
+    // Skip other keys if it is already not equal.
+    if (!equal) {
+      return equal;
+    }
+
+    // Traverse the object
+    return deepEquals(aValue, b[key]);
+  }, true);
 }

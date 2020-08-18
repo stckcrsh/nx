@@ -3,14 +3,18 @@ import { JsonObject, workspaces } from '@angular-devkit/core';
 import { runWebpack, BuildResult } from '@angular-devkit/build-webpack';
 
 import { Observable, from } from 'rxjs';
-import { writeFileSync } from 'fs';
-import { resolve } from 'path';
+import { join, resolve } from 'path';
 import { map, concatMap } from 'rxjs/operators';
 import { getNodeWebpackConfig } from '../../utils/node.config';
 import { OUT_FILENAME } from '../../utils/config';
 import { BuildBuilderOptions } from '../../utils/types';
 import { normalizeBuildOptions } from '../../utils/normalize';
 import { NodeJsSyncHost } from '@angular-devkit/core/node';
+import { createProjectGraph } from '@nrwl/workspace/src/core/project-graph';
+import {
+  calculateProjectDependencies,
+  createTmpTsConfig,
+} from '@nrwl/workspace/src/utils/buildable-libs-utils';
 
 try {
   require('dotenv').config();
@@ -20,6 +24,7 @@ export interface BuildNodeBuilderOptions extends BuildBuilderOptions {
   optimization?: boolean;
   sourceMap?: boolean;
   externalDependencies: 'all' | 'none' | string[];
+  buildLibsFromSource?: boolean;
 }
 
 export type NodeBuildEvent = BuildResult & {
@@ -32,25 +37,40 @@ function run(
   options: JsonObject & BuildNodeBuilderOptions,
   context: BuilderContext
 ): Observable<NodeBuildEvent> {
+  if (!options.buildLibsFromSource) {
+    const projGraph = createProjectGraph();
+    const { target, dependencies } = calculateProjectDependencies(
+      projGraph,
+      context
+    );
+    options.tsConfig = createTmpTsConfig(
+      join(context.workspaceRoot, options.tsConfig),
+      context.workspaceRoot,
+      target.data.root,
+      dependencies
+    );
+  }
+
   return from(getSourceRoot(context)).pipe(
-    map(sourceRoot =>
+    map((sourceRoot) =>
       normalizeBuildOptions(options, context.workspaceRoot, sourceRoot)
     ),
-    map(options => {
+    map((options) => {
       let config = getNodeWebpackConfig(options);
       if (options.webpackConfig) {
         config = require(options.webpackConfig)(config, {
           options,
-          configuration: context.target.configuration
+          configuration: context.target.configuration,
         });
       }
       return config;
     }),
-    concatMap(config =>
+    concatMap((config) =>
       runWebpack(config, context, {
-        logging: stats => {
+        logging: (stats) => {
           context.logger.info(stats.toString(config.stats));
-        }
+        },
+        webpackFactory: require('webpack'),
       })
     ),
     map((buildEvent: BuildResult) => {

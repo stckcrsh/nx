@@ -8,49 +8,57 @@ import * as inquirer from 'inquirer';
 import * as path from 'path';
 import { dirSync } from 'tmp';
 import * as yargsParser from 'yargs-parser';
+import { determinePackageManager, showNxWarning } from './shared';
 
 enum Preset {
   Empty = 'empty',
+  OSS = 'oss',
   WebComponents = 'web-components',
   Angular = 'angular',
   AngularWithNest = 'angular-nest',
   React = 'react',
   ReactWithExpress = 'react-express',
-  NextJs = 'next'
+  NextJs = 'next',
 }
 
 const presetOptions = [
   {
     value: Preset.Empty,
-    name: 'empty             [an empty workspace]'
+    name:
+      'empty             [an empty workspace with a layout that works best for building apps]',
+  },
+  {
+    value: 'oss',
+    name:
+      'oss               [an empty workspace with a layout that works best for open-source projects]',
   },
   {
     value: 'web-components',
     name:
-      'web components    [a workspace with a single app built using web components]'
+      'web components    [a workspace with a single app built using web components]',
   },
   {
     value: Preset.Angular,
-    name: 'angular           [a workspace with a single Angular application]'
+    name: 'angular           [a workspace with a single Angular application]',
   },
   {
     value: Preset.AngularWithNest,
     name:
-      'angular-nest      [a workspace with a full stack application (Angular + Nest)]'
+      'angular-nest      [a workspace with a full stack application (Angular + Nest)]',
   },
   {
     value: Preset.React,
-    name: 'react             [a workspace with a single React application]'
+    name: 'react             [a workspace with a single React application]',
   },
   {
     value: Preset.ReactWithExpress,
     name:
-      'react-express     [a workspace with a full stack application (React + Express)]'
+      'react-express     [a workspace with a full stack application (React + Express)]',
   },
   {
     value: Preset.NextJs,
-    name: 'next.js           [a workspace with a single Next.js application]'
-  }
+    name: 'next.js           [a workspace with a single Next.js application]',
+  },
 ];
 
 const tsVersion = 'TYPESCRIPT_VERSION';
@@ -60,11 +68,13 @@ const angularCliVersion = 'ANGULAR_CLI_VERSION';
 const prettierVersion = 'PRETTIER_VERSION';
 
 const parsedArgs = yargsParser(process.argv, {
-  string: ['cli', 'preset', 'appName'],
+  string: ['cli', 'preset', 'appName', 'style', 'defaultBase'],
   alias: {
-    appName: 'app-name'
+    appName: 'app-name',
+    nxCloud: 'nx-cloud',
+    defaultBase: 'default-base',
   },
-  boolean: ['help']
+  boolean: ['help', 'interactive', 'nxCloud'],
 });
 
 if (parsedArgs.help) {
@@ -72,16 +82,28 @@ if (parsedArgs.help) {
   process.exit(0);
 }
 const packageManager = determinePackageManager();
-determineWorkspaceName(parsedArgs).then(name => {
-  determinePreset(parsedArgs).then(preset => {
-    return determineAppName(preset, parsedArgs).then(appName => {
-      return determineStyle(preset).then(style => {
-        return determineCli(preset, parsedArgs).then(cli => {
-          const tmpDir = createSandbox(packageManager, cli);
-          createApp(tmpDir, cli, parsedArgs, name, preset, appName, style);
-          showCliWarning(preset, parsedArgs);
-          showNxWarning(name);
-          pointToTutorial(preset);
+determineWorkspaceName(parsedArgs).then((name) => {
+  determinePreset(parsedArgs).then((preset) => {
+    return determineAppName(preset, parsedArgs).then((appName) => {
+      return determineStyle(preset, parsedArgs).then((style) => {
+        return determineCli(preset, parsedArgs).then((cli) => {
+          return askAboutNxCloud(parsedArgs).then((cloud) => {
+            const tmpDir = createSandbox(packageManager, cli);
+            createApp(
+              tmpDir,
+              cli,
+              parsedArgs,
+              name,
+              preset,
+              appName,
+              style,
+              cloud,
+              parsedArgs.interactive,
+              parsedArgs.defaultBase
+            );
+            showNxWarning(name);
+            pointToTutorialAndCourse(preset);
+          });
         });
       });
     });
@@ -90,7 +112,7 @@ determineWorkspaceName(parsedArgs).then(name => {
 
 function showHelp() {
   const options = Object.values(Preset)
-    .map(preset => '"' + preset + '"')
+    .map((preset) => '"' + preset + '"')
     .join(', ');
 
   console.log(`
@@ -100,61 +122,23 @@ function showHelp() {
 
   Options:
 
-    name                      workspace name
+    name                      Workspace name (e.g., org name)
 
     preset                    What to create in a new workspace (options: ${options})
 
-    appName                   the name of the application created by some presets  
+    appName                   The name of the application created by some presets  
 
     cli                       CLI to power the Nx workspace (options: "nx", "angular")
+    
+    style                     Default style option to be used when a non-empty preset is selected 
+                              options: ("css", "scss", "styl", "less") for React/Next.js also ("styled-components", "@emotion/styled")
+
+    interactive               Enable interactive mode when using presets (boolean)
+    
+    nx-cloud                  Connect to distributed computation cache provided by Nx Cloud (boolean)
 
     [new workspace options]   any 'new workspace' options
 `);
-}
-
-function determinePackageManager() {
-  let packageManager = getPackageManagerFromAngularCLI();
-  if (packageManager === 'npm' || isPackageManagerInstalled(packageManager)) {
-    return packageManager;
-  }
-
-  if (isPackageManagerInstalled('yarn')) {
-    return 'yarn';
-  }
-
-  if (isPackageManagerInstalled('pnpm')) {
-    return 'pnpm';
-  }
-
-  return 'npm';
-}
-
-function getPackageManagerFromAngularCLI(): string {
-  // If you have Angular CLI installed, read Angular CLI config.
-  // If it isn't installed, default to 'yarn'.
-  try {
-    return execSync('ng config -g cli.packageManager', {
-      stdio: ['ignore', 'pipe', 'ignore'],
-      timeout: 500
-    })
-      .toString()
-      .trim();
-  } catch (e) {
-    return 'yarn';
-  }
-}
-
-function isPackageManagerInstalled(packageManager: string) {
-  let isInstalled = false;
-  try {
-    execSync(`${packageManager} --version`, {
-      stdio: ['ignore', 'ignore', 'ignore']
-    });
-    isInstalled = true;
-  } catch (e) {
-    /* do nothing */
-  }
-  return isInstalled;
 }
 
 function determineWorkspaceName(parsedArgs: any): Promise<string> {
@@ -169,14 +153,14 @@ function determineWorkspaceName(parsedArgs: any): Promise<string> {
       {
         name: 'WorkspaceName',
         message: `Workspace name (e.g., org name)    `,
-        type: 'string'
-      }
+        type: 'string',
+      },
     ])
-    .then(a => {
+    .then((a) => {
       if (!a.WorkspaceName) {
         output.error({
           title: 'Invalid workspace name',
-          bodyLines: [`Workspace name cannot be empty`]
+          bodyLines: [`Workspace name cannot be empty`],
         });
         process.exit(1);
       }
@@ -192,8 +176,8 @@ function determinePreset(parsedArgs: any): Promise<Preset> {
         bodyLines: [
           `It must be one of the following:`,
           '',
-          ...Object.values(Preset)
-        ]
+          ...Object.values(Preset),
+        ],
       });
       process.exit(1);
     } else {
@@ -208,14 +192,14 @@ function determinePreset(parsedArgs: any): Promise<Preset> {
         message: `What to create in the new workspace`,
         default: 'empty',
         type: 'list',
-        choices: presetOptions
-      }
+        choices: presetOptions,
+      },
     ])
     .then((a: { Preset: Preset }) => a.Preset);
 }
 
 function determineAppName(preset: Preset, parsedArgs: any): Promise<string> {
-  if (preset === Preset.Empty) {
+  if (preset === Preset.Empty || preset === Preset.OSS) {
     return Promise.resolve('');
   }
 
@@ -228,14 +212,14 @@ function determineAppName(preset: Preset, parsedArgs: any): Promise<string> {
       {
         name: 'AppName',
         message: `Application name                   `,
-        type: 'string'
-      }
+        type: 'string',
+      },
     ])
-    .then(a => {
+    .then((a) => {
       if (!a.AppName) {
         output.error({
           title: 'Invalid name',
-          bodyLines: [`Name cannot be empty`]
+          bodyLines: [`Name cannot be empty`],
         });
         process.exit(1);
       }
@@ -247,20 +231,20 @@ function determineCli(preset: Preset, parsedArgs: any) {
   const angular = {
     package: '@angular/cli',
     version: angularCliVersion,
-    command: 'ng'
+    command: 'ng',
   };
 
   const nx = {
     package: '@nrwl/tao',
     version: cliVersion,
-    command: 'tao'
+    command: 'tao',
   };
 
   if (parsedArgs.cli) {
     if (['nx', 'angular'].indexOf(parsedArgs.cli) === -1) {
       output.error({
         title: 'Invalid cli',
-        bodyLines: [`It must be one of the following:`, '', 'nx', 'angular']
+        bodyLines: [`It must be one of the following:`, '', 'nx', 'angular'],
       });
       process.exit(1);
     }
@@ -272,6 +256,7 @@ function determineCli(preset: Preset, parsedArgs: any) {
     case Preset.AngularWithNest: {
       return Promise.resolve(angular);
     }
+    case Preset.OSS:
     case Preset.WebComponents:
     case Preset.React:
     case Preset.ReactWithExpress:
@@ -290,70 +275,94 @@ function determineCli(preset: Preset, parsedArgs: any) {
               {
                 value: 'nx',
                 name:
-                  'Nx           [Extensible CLI for JavaScript and TypeScript applications]'
+                  'Nx           [Recommended for all applications (React, Node, etc..)]',
               },
 
               {
                 value: 'angular',
-                name:
-                  'Angular CLI  [Extensible CLI for Angular applications. Recommended for Angular projects.]'
-              }
-            ]
-          }
+                name: 'Angular CLI  [Recommended for Angular only workspaces]',
+              },
+            ],
+          },
         ])
         .then((a: { CLI: string }) => (a.CLI === 'angular' ? angular : nx));
     }
   }
 }
 
-function determineStyle(preset: Preset) {
-  if (preset === Preset.Empty) {
+function determineStyle(preset: Preset, parsedArgs: any) {
+  if (preset === Preset.Empty || preset === Preset.OSS) {
     return Promise.resolve(null);
   }
 
   const choices = [
     {
       value: 'css',
-      name: 'CSS'
+      name: 'CSS',
     },
     {
       value: 'scss',
-      name: 'SASS(.scss)  [ http://sass-lang.com   ]'
+      name: 'SASS(.scss)  [ http://sass-lang.com   ]',
     },
     {
       value: 'styl',
-      name: 'Stylus(.styl)[ http://stylus-lang.com ]'
+      name: 'Stylus(.styl)[ http://stylus-lang.com ]',
     },
     {
       value: 'less',
-      name: 'LESS         [ http://lesscss.org     ]'
-    }
+      name: 'LESS         [ http://lesscss.org     ]',
+    },
   ];
 
-  if (preset === Preset.ReactWithExpress || preset === Preset.React) {
+  if ([Preset.ReactWithExpress, Preset.React, Preset.NextJs].includes(preset)) {
     choices.push(
       {
         value: 'styled-components',
-        name: 'styled-components [ https://styled-components.com ]'
+        name: 'styled-components [ https://styled-components.com            ]',
       },
       {
         value: '@emotion/styled',
-        name: 'emotion           [ https://emotion.sh]'
+        name: 'emotion           [ https://emotion.sh                       ]',
+      },
+      {
+        value: 'styled-jsx',
+        name: 'styled-jsx        [ https://www.npmjs.com/package/styled-jsx ]',
       }
     );
   }
 
-  return inquirer
-    .prompt([
-      {
-        name: 'style',
-        message: `Default stylesheet format          `,
-        default: 'css',
-        type: 'list',
-        choices
-      }
-    ])
-    .then(a => a.style);
+  if (!parsedArgs.style) {
+    return inquirer
+      .prompt([
+        {
+          name: 'style',
+          message: `Default stylesheet format          `,
+          default: 'css',
+          type: 'list',
+          choices,
+        },
+      ])
+      .then((a) => a.style);
+  }
+
+  const foundStyle = choices.find(
+    (choice) => choice.value === parsedArgs.style
+  );
+
+  if (foundStyle === undefined) {
+    output.error({
+      title: 'Invalid style',
+      bodyLines: [
+        `It must be one of the following:`,
+        '',
+        ...choices.map((choice) => choice.value),
+      ],
+    });
+
+    process.exit(1);
+  }
+
+  return Promise.resolve(parsedArgs.style);
 }
 
 function createSandbox(
@@ -369,15 +378,15 @@ function createSandbox(
         '@nrwl/workspace': nxVersion,
         [cli.package]: cli.version,
         typescript: tsVersion,
-        prettier: prettierVersion
+        prettier: prettierVersion,
       },
-      license: 'MIT'
+      license: 'MIT',
     })
   );
 
   execSync(`${packageManager} install --silent`, {
     cwd: tmpDir,
-    stdio: [0, 1, 2]
+    stdio: [0, 1, 2],
   });
 
   return tmpDir;
@@ -390,120 +399,138 @@ function createApp(
   name: string,
   preset: Preset,
   appName: string,
-  style: string | null
+  style: string | null,
+  nxCloud: boolean,
+  interactive: boolean,
+  defaultBase: string
 ) {
-  // creating the app itself
-  const args = [
-    name,
-    ...process.argv
-      .slice(parsedArgs._[2] ? 3 : 2)
-      .filter(
-        a =>
-          !a.startsWith('--cli') &&
-          !a.startsWith('--preset') &&
-          !a.startsWith('--appName') &&
-          !a.startsWith('--app-name')
-      ) // not used by the new command
-      .map(a => `"${a}"`)
-  ].join(' ');
+  const filterArgs = [
+    '_',
+    'app-name',
+    'appName',
+    'cli',
+    'default-base',
+    'defaultBase',
+    'interactive',
+    'nx-cloud',
+    'nxCloud',
+    'preset',
+    'style',
+  ];
+
+  // These are the arguments that are passed to the schematic
+  const args = Object.keys(parsedArgs)
+    .filter((key) => !filterArgs.includes(key))
+    .map((key) => `--${key}=${parsedArgs[key]}`)
+    .join(' ');
 
   const appNameArg = appName ? ` --appName="${appName}"` : ``;
   const styleArg = style ? ` --style="${style}"` : ``;
+  const nxCloudArg = nxCloud ? ` --nxCloud` : ``;
+  const interactiveArg = interactive
+    ? ` --interactive=true`
+    : ` --interactive=false`;
+  const defaultBaseArg = defaultBase ? ` --defaultBase="${defaultBase}"` : ``;
 
   console.log(
-    `new ${args} --preset="${preset}"${appNameArg}${styleArg} --collection=@nrwl/workspace`
+    `new ${name} ${args} --preset="${preset}"${appNameArg}${styleArg}${nxCloudArg}${interactiveArg}${defaultBaseArg} --collection=@nrwl/workspace`
+  );
+  const executablePath = path.join(tmpDir, 'node_modules', '.bin', cli.command);
+  const collectionJsonPath = path.join(
+    tmpDir,
+    'node_modules',
+    '@nrwl',
+    'workspace',
+    'collection.json'
   );
   execSync(
-    `"${path.join(
-      tmpDir,
-      'node_modules',
-      '.bin',
-      cli.command
-    )}" new ${args} --preset="${preset}"${appNameArg}${styleArg} --collection=@nrwl/workspace`,
+    `"${executablePath}" new ${name} ${args} --preset="${preset}"${appNameArg}${styleArg}${nxCloudArg}${interactiveArg}${defaultBaseArg} --collection=${collectionJsonPath}`,
     {
-      stdio: [0, 1, 2]
+      stdio: [0, 1, 2],
     }
   );
-}
 
-function showNxWarning(workspaceName: string) {
-  try {
-    const pathToRunNxCommand = path.resolve(process.cwd(), workspaceName);
-    execSync('nx --version', {
-      cwd: pathToRunNxCommand,
-      stdio: ['ignore', 'ignore', 'ignore']
-    });
-  } catch (e) {
-    // no nx found
+  if (nxCloud) {
     output.addVerticalSeparator();
-    output.note({
-      title: `Nx CLI is not installed globally.`,
-      bodyLines: [
-        `This means that you might have to use "yarn nx" or "npm nx" to execute commands in the workspace.`,
-        `Run "yarn global add @nrwl/cli" or "npm install -g @nrwl/cli" to be able to execute command directly.`
-      ]
+    execSync(`npx nx g @nrwl/nx-cloud:init --no-analytics`, {
+      stdio: [0, 1, 2],
+      cwd: path.join(process.cwd(), name),
     });
   }
 }
 
-function showCliWarning(preset: Preset, parsedArgs: yargsParser.Arguments) {
-  if (!parsedArgs.cli) {
-    switch (preset) {
-      case Preset.Angular:
-      case Preset.AngularWithNest:
+async function askAboutNxCloud(parsedArgs: any) {
+  if (parsedArgs.nxCloud === undefined) {
+    return inquirer
+      .prompt([
         {
-          output.addVerticalSeparator();
-          output.note({
-            title: `Because you selected an Angular-specific preset, we generated an Nx workspace powered by the Angular CLI.`,
-            bodyLines: [
-              `Run 'create-nx-workspace --help' to see how to select a different CLI.`
-            ]
-          });
-        }
-        break;
-      case Preset.WebComponents:
-      case Preset.React:
-      case Preset.ReactWithExpress:
-      case Preset.NextJs:
-        {
-          output.addVerticalSeparator();
-          output.note({
-            title: `We generated an Nx workspace powered by the Nx CLI.`,
-            bodyLines: [
-              `Run 'create-nx-workspace --help' to see how to select a different CLI.`
-            ]
-          });
-        }
-        break;
-    }
+          name: 'NxCloud',
+          message: `Use the free tier of the distributed cache provided by Nx Cloud?`,
+          type: 'list',
+          choices: [
+            {
+              value: 'yes',
+              name:
+                'Yes [Faster command execution, faster CI. Learn more at https://nx.app]',
+            },
+
+            {
+              value: 'no',
+              name: 'No  [Only use local computation cache]',
+            },
+          ],
+          default: 'no',
+        },
+      ])
+      .then((a: { NxCloud: 'yes' | 'no' }) => a.NxCloud === 'yes');
+  } else {
+    return parsedArgs.nxCloud;
   }
 }
 
-function pointToTutorial(preset: Preset) {
+function pointToTutorialAndCourse(preset: Preset) {
+  const title = `First time using Nx? Check out this interactive Nx tutorial.`;
   switch (preset) {
     case Preset.React:
     case Preset.ReactWithExpress:
     case Preset.NextJs:
       output.addVerticalSeparator();
       output.note({
-        title: `First time using Nx? Check out this interactive Nx tutorial.`,
-        bodyLines: [`https://nx.dev/react/tutorial/01-create-application`]
+        title: title,
+        bodyLines: [
+          `https://nx.dev/react/tutorial/01-create-application`,
+          ...pointToCourse(),
+        ],
       });
       break;
     case Preset.Angular:
     case Preset.AngularWithNest:
       output.addVerticalSeparator();
       output.note({
-        title: `First time using Nx? Check out this interactive Nx tutorial.`,
-        bodyLines: [`https://nx.dev/angular/tutorial/01-create-application`]
+        title: title,
+        bodyLines: [
+          `https://nx.dev/angular/tutorial/01-create-application`,
+          ...pointToCourse(),
+        ],
       });
       break;
     case Preset.WebComponents:
       output.addVerticalSeparator();
       output.note({
-        title: `First time using Nx? Check out this interactive Nx tutorial.`,
-        bodyLines: [`https://nx.dev/web/tutorial/01-create-application`]
+        title: title,
+        bodyLines: [
+          `https://nx.dev/web/tutorial/01-create-application`,
+          ...pointToCourse(),
+        ],
       });
       break;
   }
+}
+
+function pointToCourse(): string[] {
+  return [
+    ``,
+    `Prefer watching videos? Check out this free Nx course on YouTube.`,
+    `https://www.youtube.com/watch?v=2mYLe9Kp9VM&list=PLakNactNC1dH38AfqmwabvOszDmKriGco`,
+  ];
 }

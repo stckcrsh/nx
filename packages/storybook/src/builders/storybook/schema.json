@@ -41,7 +41,7 @@
       "type": "array",
       "description": "Directory where to load static files from, array of strings",
       "items": {
-        "type": "number"
+        "type": "string"
       }
     },
     "config": {
@@ -77,6 +77,11 @@
           ]
         }
       ]
+    },
+    "docsMode": {
+      "type": "boolean",
+      "description": "Build a documentation-only site using addon-docs.",
+      "default": false
     },
     "quiet": {
       "type": "boolean",

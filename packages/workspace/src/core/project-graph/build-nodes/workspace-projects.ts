@@ -7,9 +7,10 @@ export function buildWorkspaceProjectNodes(
 ) {
   const toAdd = [];
 
-  Object.keys(ctx.fileMap).forEach(key => {
+  Object.keys(ctx.fileMap).forEach((key) => {
     const p = ctx.workspaceJson.projects[key];
 
+    // TODO, types and projectType should allign
     const projectType =
       p.projectType === 'application'
         ? key.endsWith('-e2e')
@@ -27,8 +28,8 @@ export function buildWorkspaceProjectNodes(
       data: {
         ...p,
         tags,
-        files: ctx.fileMap[key]
-      }
+        files: ctx.fileMap[key],
+      },
     });
   });
 
@@ -39,11 +40,11 @@ export function buildWorkspaceProjectNodes(
     return a.data.root.length > b.data.root.length ? -1 : 1;
   });
 
-  toAdd.forEach(n => {
+  toAdd.forEach((n) => {
     addNode({
       name: n.name,
       type: n.type,
-      data: n.data
+      data: n.data,
     });
   });
 }

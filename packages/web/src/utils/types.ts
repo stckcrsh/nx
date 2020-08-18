@@ -1,5 +1,5 @@
 import { FileReplacement } from './normalize';
-import { Path } from '@angular-devkit/core';
+import { JsonObject } from '@angular-devkit/core';
 
 export interface OptimizationOptions {
   scripts: boolean;
@@ -21,6 +21,7 @@ export interface BuildBuilderOptions {
   sourceMap?: boolean | SourceMapOptions;
   optimization?: boolean | OptimizationOptions;
   showCircularDependencies?: boolean;
+  memoryLimit?: number;
   maxWorkers?: number;
   poll?: number;
 
@@ -36,15 +37,33 @@ export interface BuildBuilderOptions {
   webpackConfig?: string;
 
   root?: string;
-  sourceRoot?: Path;
+  sourceRoot?: string;
 }
 
-export interface BundleBuilderOptions {
+export interface Globals {
+  moduleId: string;
+  global: string;
+}
+
+export interface PackageBuilderOptions {
   outputPath: string;
   tsConfig: string;
   project: string;
   entryFile: string;
+  extractCss?: boolean;
+  globals?: Globals[];
+  external?: string[];
   rollupConfig?: string;
   babelConfig?: string;
   watch?: boolean;
+  assets?: any[];
+  updateBuildableProjectDepsInPackageJson?: boolean;
+  umdName?: string;
+}
+
+export interface AssetGlobPattern extends JsonObject {
+  glob: string;
+  input: string;
+  output: string;
+  ignore?: string[];
 }

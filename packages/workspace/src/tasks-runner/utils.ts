@@ -8,9 +8,7 @@ export function getCommandAsString(
   isYarn: boolean,
   task: Task
 ) {
-  return getCommand(cliCommand, isYarn, task)
-    .join(' ')
-    .trim();
+  return getCommand(cliCommand, isYarn, task).join(' ').trim();
 }
 
 export function getCommand(cliCommand: string, isYarn: boolean, task: Task) {
@@ -29,7 +27,7 @@ export function getCommand(cliCommand: string, isYarn: boolean, task: Task) {
       task.target.target,
       task.target.project,
       ...config,
-      ...args
+      ...args,
     ];
   } else {
     const config = task.target.configuration
@@ -41,26 +39,39 @@ export function getCommand(cliCommand: string, isYarn: boolean, task: Task) {
       ...(isYarn ? [] : ['--']),
       'run',
       `${task.target.project}:${task.target.target}${config}`,
-      ...args
+      ...args,
     ];
   }
 }
 
 export function getOutputs(p: Record<string, ProjectGraphNode>, task: Task) {
-  const architect = p[task.target.project].data.architect[task.target.target];
+  return getOutputsForTargetAndConfiguration(task, p[task.target.project]);
+}
+
+export function getOutputsForTargetAndConfiguration(
+  task: Pick<Task, 'target' | 'overrides'>,
+  node: ProjectGraphNode
+) {
+  if (task.overrides?.outputPath) {
+    return [task.overrides?.outputPath];
+  }
+  const { target, configuration } = task.target;
+  const architect = node.data.architect[target];
+  if (architect && architect.outputs) return architect.outputs;
+
   let opts = architect.options || {};
-  if (
-    architect.configurations &&
-    architect.configurations[task.target.configuration]
-  ) {
+  if (architect.configurations && architect.configurations[configuration]) {
     opts = {
       ...opts,
-      ...architect.configurations[task.target.configuration]
+      ...architect.configurations[configuration],
     };
   }
-  let outputs = [];
+
   if (opts.outputPath) {
-    outputs.push(opts.outputPath);
+    return Array.isArray(opts.outputPath) ? opts.outputPath : [opts.outputPath];
+  } else if (target === 'build') {
+    return [`dist/${node.data.root}`];
+  } else {
+    return [];
   }
-  return outputs;
 }

@@ -1,8 +1,10 @@
 import { Tree } from '@angular-devkit/schematics';
 import { SchematicTestRunner } from '@angular-devkit/schematics/testing';
-import { readJsonInTree } from '@nrwl/workspace';
+import { readJsonInTree, updateJsonInTree } from '@nrwl/workspace';
 import * as path from 'path';
 import { createEmptyWorkspace } from '@nrwl/workspace/testing';
+import { join } from 'path';
+import { callRule } from '../../../src/utils/testing';
 
 describe('Update 8-10-0', () => {
   let tree: Tree;
@@ -15,6 +17,11 @@ describe('Update 8-10-0', () => {
       '@nrwl/react',
       path.join(__dirname, '../../../migrations.json')
     );
+
+    schematicRunner.registerCollection(
+      '@nrwl/cypress',
+      join(__dirname, '../../../../cypress/collection.json')
+    );
   });
 
   it(`should update libs`, async () => {
@@ -23,11 +30,11 @@ describe('Update 8-10-0', () => {
       JSON.stringify({
         dependencies: {
           '@emotion/core': '10.0.23',
-          '@emotion/styled': '10.0.23'
+          '@emotion/styled': '10.0.23',
         },
         devDependencies: {
-          '@types/react': '16.9.13'
-        }
+          '@types/react': '16.9.13',
+        },
       })
     );
 
@@ -39,11 +46,11 @@ describe('Update 8-10-0', () => {
     expect(packageJson).toMatchObject({
       dependencies: {
         '@emotion/core': '10.0.27',
-        '@emotion/styled': '10.0.27'
+        '@emotion/styled': '10.0.27',
       },
       devDependencies: {
-        '@types/react': '16.9.17'
-      }
+        '@types/react': '16.9.17',
+      },
     });
   });
 
@@ -51,6 +58,16 @@ describe('Update 8-10-0', () => {
     const reactRunner = new SchematicTestRunner(
       '@nrwl/react',
       path.join(__dirname, '../../../collection.json')
+    );
+
+    reactRunner.registerCollection(
+      '@nrwl/jest',
+      join(__dirname, '../../../../jest/collection.json')
+    );
+
+    reactRunner.registerCollection(
+      '@nrwl/cypress',
+      join(__dirname, '../../../../cypress/collection.json')
     );
     tree = await reactRunner
       .runSchematicAsync('app', { name: 'demo' }, tree)
@@ -62,6 +79,14 @@ describe('Update 8-10-0', () => {
         tree
       )
       .toPromise();
+
+    tree = await callRule(
+      updateJsonInTree(`nested/nested-app/tsconfig.json`, (json) => {
+        json.files = [];
+        return json;
+      }),
+      tree
+    );
 
     tree = await schematicRunner
       .runSchematicAsync('update-8.10.0', {}, tree)
@@ -90,11 +115,11 @@ describe('Update 8-10-0', () => {
           build: {
             builder: '@nrwl/web:build',
             options: {
-              webpackConfig: '@nrwl/react/plugins/babel'
-            }
-          }
-        }
-      }
+              webpackConfig: '@nrwl/react/plugins/babel',
+            },
+          },
+        },
+      },
     };
     tree.overwrite('/workspace.json', JSON.stringify(workspaceJson));
 
@@ -111,11 +136,11 @@ describe('Update 8-10-0', () => {
           build: {
             builder: '@nrwl/web:build',
             options: {
-              webpackConfig: '@nrwl/react/plugins/webpack'
-            }
-          }
-        }
-      }
+              webpackConfig: '@nrwl/react/plugins/webpack',
+            },
+          },
+        },
+      },
     });
   });
 });

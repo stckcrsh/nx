@@ -18,21 +18,23 @@ describe('lib', () => {
       expect(workspaceJson.projects['my-lib'].root).toEqual('libs/my-lib');
       expect(workspaceJson.projects['my-lib'].architect.build).toBeUndefined();
       expect(workspaceJson.projects['my-lib'].architect.lint).toEqual({
-        builder: '@angular-devkit/build-angular:tslint',
+        builder: '@nrwl/linter:lint',
         options: {
-          exclude: ['**/node_modules/**', '!libs/my-lib/**'],
+          linter: 'eslint',
+          exclude: ['**/node_modules/**', '!libs/my-lib/**/*'],
           tsConfig: [
             'libs/my-lib/tsconfig.lib.json',
-            'libs/my-lib/tsconfig.spec.json'
-          ]
-        }
+            'libs/my-lib/tsconfig.spec.json',
+          ],
+        },
       });
       expect(workspaceJson.projects['my-lib'].architect.test).toEqual({
         builder: '@nrwl/jest:jest',
         options: {
           jestConfig: 'libs/my-lib/jest.config.js',
-          tsConfig: 'libs/my-lib/tsconfig.spec.json'
-        }
+          tsConfig: 'libs/my-lib/tsconfig.spec.json',
+          passWithNoTests: true,
+        },
       });
     });
 
@@ -43,34 +45,33 @@ describe('lib', () => {
         appTree
       );
       const nxJson = readJsonInTree<NxJson>(tree, '/nx.json');
-      expect(nxJson).toEqual({
-        npmScope: 'proj',
-        projects: {
-          'my-lib': {
-            tags: ['one', 'two']
-          }
-        }
+      expect(nxJson.projects).toEqual({
+        'my-lib': {
+          tags: ['one', 'two'],
+        },
       });
     });
 
-    it('should update root tsconfig.json', async () => {
+    it('should update root tsconfig.base.json', async () => {
       const tree = await runSchematic('lib', { name: 'myLib' }, appTree);
-      const tsconfigJson = readJsonInTree(tree, '/tsconfig.json');
+      const tsconfigJson = readJsonInTree(tree, '/tsconfig.base.json');
       expect(tsconfigJson.compilerOptions.paths['@proj/my-lib']).toEqual([
-        'libs/my-lib/src/index.ts'
+        'libs/my-lib/src/index.ts',
       ]);
     });
 
     it('should create a local tsconfig.json', async () => {
       const tree = await runSchematic('lib', { name: 'myLib' }, appTree);
       const tsconfigJson = readJsonInTree(tree, 'libs/my-lib/tsconfig.json');
-      expect(tsconfigJson).toEqual({
-        extends: '../../tsconfig.json',
-        compilerOptions: {
-          types: ['node', 'jest']
+      expect(tsconfigJson.extends).toEqual('../../tsconfig.base.json');
+      expect(tsconfigJson.references).toEqual([
+        {
+          path: './tsconfig.lib.json',
         },
-        include: ['**/*.ts']
-      });
+        {
+          path: './tsconfig.spec.json',
+        },
+      ]);
     });
 
     it('should extend the local tsconfig.json with tsconfig.spec.json', async () => {
@@ -88,6 +89,7 @@ describe('lib', () => {
         tree,
         'libs/my-lib/tsconfig.lib.json'
       );
+      expect(tsconfigJson.compilerOptions.types).toContain('node');
       expect(tsconfigJson.extends).toEqual('./tsconfig.json');
     });
 
@@ -105,18 +107,15 @@ describe('lib', () => {
         {
           name: 'myLib',
           directory: 'myDir',
-          tags: 'one'
+          tags: 'one',
         },
         appTree
       );
       const nxJson = readJsonInTree<NxJson>(tree, '/nx.json');
-      expect(nxJson).toEqual({
-        npmScope: 'proj',
-        projects: {
-          'my-dir-my-lib': {
-            tags: ['one']
-          }
-        }
+      expect(nxJson.projects).toEqual({
+        'my-dir-my-lib': {
+          tags: ['one'],
+        },
       });
 
       const tree2 = await runSchematic(
@@ -124,21 +123,18 @@ describe('lib', () => {
         {
           name: 'myLib2',
           directory: 'myDir',
-          tags: 'one,two'
+          tags: 'one,two',
         },
         tree
       );
       const nxJson2 = readJsonInTree<NxJson>(tree2, '/nx.json');
-      expect(nxJson2).toEqual({
-        npmScope: 'proj',
-        projects: {
-          'my-dir-my-lib': {
-            tags: ['one']
-          },
-          'my-dir-my-lib2': {
-            tags: ['one', 'two']
-          }
-        }
+      expect(nxJson2.projects).toEqual({
+        'my-dir-my-lib': {
+          tags: ['one'],
+        },
+        'my-dir-my-lib2': {
+          tags: ['one', 'two'],
+        },
       });
     });
 
@@ -164,14 +160,15 @@ describe('lib', () => {
         'libs/my-dir/my-lib'
       );
       expect(workspaceJson.projects['my-dir-my-lib'].architect.lint).toEqual({
-        builder: '@angular-devkit/build-angular:tslint',
+        builder: '@nrwl/linter:lint',
         options: {
-          exclude: ['**/node_modules/**', '!libs/my-dir/my-lib/**'],
+          linter: 'eslint',
+          exclude: ['**/node_modules/**', '!libs/my-dir/my-lib/**/*'],
           tsConfig: [
             'libs/my-dir/my-lib/tsconfig.lib.json',
-            'libs/my-dir/my-lib/tsconfig.spec.json'
-          ]
-        }
+            'libs/my-dir/my-lib/tsconfig.spec.json',
+          ],
+        },
       });
     });
 
@@ -181,13 +178,33 @@ describe('lib', () => {
         { name: 'myLib', directory: 'myDir' },
         appTree
       );
-      const tsconfigJson = readJsonInTree(tree, '/tsconfig.json');
-      expect(tsconfigJson.compilerOptions.paths['@proj/my-dir/my-lib']).toEqual(
-        ['libs/my-dir/my-lib/src/index.ts']
-      );
+      const tsconfigJson = readJsonInTree(tree, '/tsconfig.base.json');
+      expect(
+        tsconfigJson.compilerOptions.paths['@proj/my-dir/my-lib']
+      ).toEqual(['libs/my-dir/my-lib/src/index.ts']);
       expect(
         tsconfigJson.compilerOptions.paths['my-dir-my-lib/*']
       ).toBeUndefined();
+    });
+
+    it('should throw an exception when not passing importPath when using --publishable', async () => {
+      expect.assertions(1);
+
+      try {
+        const tree = await runSchematic(
+          'lib',
+          {
+            name: 'myLib',
+            directory: 'myDir',
+            publishable: true,
+          },
+          appTree
+        );
+      } catch (e) {
+        expect(e.message).toContain(
+          'For publishable libs you have to provide a proper "--importPath" which needs to be a valid npm package name (e.g. my-awesome-lib or @myorg/my-lib)'
+        );
+      }
     });
 
     it('should create a local tsconfig.json', async () => {
@@ -201,13 +218,15 @@ describe('lib', () => {
         tree,
         'libs/my-dir/my-lib/tsconfig.json'
       );
-      expect(tsconfigJson).toEqual({
-        extends: '../../../tsconfig.json',
-        compilerOptions: {
-          types: ['node', 'jest']
+      expect(tsconfigJson.extends).toEqual('../../../tsconfig.base.json');
+      expect(tsconfigJson.references).toEqual([
+        {
+          path: './tsconfig.lib.json',
         },
-        include: ['**/*.ts']
-      });
+        {
+          path: './tsconfig.spec.json',
+        },
+      ]);
     });
   });
 
@@ -227,16 +246,115 @@ describe('lib', () => {
         resultTree,
         'libs/my-lib/tsconfig.json'
       );
-      expect(tsconfigJson).toEqual({
-        extends: '../../tsconfig.json',
-        compilerOptions: {
-          types: ['node']
+      expect(tsconfigJson.extends).toEqual('../../tsconfig.base.json');
+      expect(tsconfigJson.references).toEqual([
+        {
+          path: './tsconfig.lib.json',
         },
-        include: ['**/*.ts']
-      });
+      ]);
       expect(
         workspaceJson.projects['my-lib'].architect.lint.options.tsConfig
       ).toEqual(['libs/my-lib/tsconfig.lib.json']);
+    });
+  });
+
+  describe('buildable package', () => {
+    it('should have a builder defined', async () => {
+      const tree = await runSchematic(
+        'lib',
+        { name: 'myLib', buildable: true },
+        appTree
+      );
+      const workspaceJson = readJsonInTree(tree, '/workspace.json');
+
+      expect(workspaceJson.projects['my-lib'].root).toEqual('libs/my-lib');
+
+      expect(workspaceJson.projects['my-lib'].architect.build).toBeDefined();
+    });
+  });
+
+  describe('publishable package', () => {
+    it('should have a builder defined', async () => {
+      const tree = await runSchematic(
+        'lib',
+        { name: 'myLib', publishable: true, importPath: '@proj/mylib' },
+        appTree
+      );
+      const workspaceJson = readJsonInTree(tree, '/workspace.json');
+
+      expect(workspaceJson.projects['my-lib'].root).toEqual('libs/my-lib');
+
+      expect(workspaceJson.projects['my-lib'].architect.build).toBeDefined();
+    });
+
+    it('should update package.json', async () => {
+      const publishableTree = await runSchematic(
+        'lib',
+        { name: 'mylib', publishable: true, importPath: '@proj/mylib' },
+        appTree
+      );
+
+      let packageJsonContent = readJsonInTree(
+        publishableTree,
+        'libs/mylib/package.json'
+      );
+
+      expect(packageJsonContent.name).toEqual('@proj/mylib');
+    });
+  });
+
+  describe('--importPath', () => {
+    it('should update the package.json & tsconfig with the given import path', async () => {
+      const tree = await runSchematic(
+        'lib',
+        {
+          name: 'myLib',
+          publishable: true,
+          directory: 'myDir',
+          importPath: '@myorg/lib',
+        },
+        appTree
+      );
+      const packageJson = readJsonInTree(
+        tree,
+        'libs/my-dir/my-lib/package.json'
+      );
+      const tsconfigJson = readJsonInTree(tree, '/tsconfig.base.json');
+
+      expect(packageJson.name).toBe('@myorg/lib');
+      expect(
+        tsconfigJson.compilerOptions.paths[packageJson.name]
+      ).toBeDefined();
+    });
+
+    it('should fail if the same importPath has already been used', async () => {
+      const tree1 = await runSchematic(
+        'lib',
+        {
+          name: 'myLib1',
+          publishable: true,
+          importPath: '@myorg/lib',
+        },
+        appTree
+      );
+
+      try {
+        await runSchematic(
+          'lib',
+          {
+            name: 'myLib2',
+            publishable: true,
+            importPath: '@myorg/lib',
+          },
+          tree1
+        );
+      } catch (e) {
+        expect(e.message).toContain(
+          'You already have a library using the import path'
+        );
+      }
+
+      expect.assertions(1);
     });
   });
 });

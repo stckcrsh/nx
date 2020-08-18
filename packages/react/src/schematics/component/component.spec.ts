@@ -1,6 +1,6 @@
 import { Tree } from '@angular-devkit/schematics';
 import { createEmptyWorkspace } from '@nrwl/workspace/testing';
-import { runSchematic, createApp, createLib } from '../../utils/testing';
+import { createApp, createLib, runSchematic } from '../../utils/testing';
 import { readJsonInTree } from '@nrwl/workspace/src/utils/ast-utils';
 
 describe('component', () => {
@@ -84,6 +84,36 @@ describe('component', () => {
     });
   });
 
+  describe('--style none', () => {
+    it('should generate component files without styles', async () => {
+      const tree = await runSchematic(
+        'component',
+        { name: 'hello', project: projectName, style: 'none' },
+        appTree
+      );
+      expect(tree.exists('libs/my-lib/src/lib/hello/hello.tsx')).toBeTruthy();
+      expect(
+        tree.exists('libs/my-lib/src/lib/hello/hello.spec.tsx')
+      ).toBeTruthy();
+      expect(tree.exists('libs/my-lib/src/lib/hello/hello.css')).toBeFalsy();
+      expect(tree.exists('libs/my-lib/src/lib/hello/hello.scss')).toBeFalsy();
+      expect(tree.exists('libs/my-lib/src/lib/hello/hello.styl')).toBeFalsy();
+
+      const content = tree
+        .read('libs/my-lib/src/lib/hello/hello.tsx')
+        .toString();
+      expect(content).not.toContain('styled-components');
+      expect(content).not.toContain('<StyledHello>');
+      expect(content).not.toContain('@emotion/styled');
+      expect(content).not.toContain('<StyledHello>');
+
+      //for imports
+      expect(content).not.toContain('hello.styl');
+      expect(content).not.toContain('hello.css');
+      expect(content).not.toContain('hello.scss');
+    });
+  });
+
   describe('--style styled-components', () => {
     it('should use styled-components as the styled API library', async () => {
       const tree = await runSchematic(
@@ -149,6 +179,37 @@ describe('component', () => {
     });
   });
 
+  describe('--style styled-jsx', () => {
+    it('should use styled-jsx as the styled API library', async () => {
+      const tree = await runSchematic(
+        'component',
+        { name: 'hello', project: projectName, style: 'styled-jsx' },
+        appTree
+      );
+
+      expect(
+        tree.exists('libs/my-lib/src/lib/hello/hello.styled-jsx')
+      ).toBeFalsy();
+      expect(tree.exists('libs/my-lib/src/lib/hello/hello.tsx')).toBeTruthy();
+
+      const content = tree
+        .read('libs/my-lib/src/lib/hello/hello.tsx')
+        .toString();
+      expect(content).toContain('<style jsx>');
+    });
+
+    it('should add dependencies to package.json', async () => {
+      const tree = await runSchematic(
+        'component',
+        { name: 'hello', project: projectName, style: 'styled-jsx' },
+        appTree
+      );
+
+      const packageJSON = readJsonInTree(tree, 'package.json');
+      expect(packageJSON.dependencies['styled-jsx']).toBeDefined();
+    });
+  });
+
   describe('--routing', () => {
     it('should add routes to the component', async () => {
       const tree = await runSchematic(
@@ -177,17 +238,45 @@ describe('component', () => {
         appTree
       );
 
-      expect(tree.exists('/libs/my-lib/src/lib/components/hello.tsx'));
+      expect(tree.exists('/libs/my-lib/src/components/hello/hello.tsx'));
     });
 
     it('should create with nested directories', async () => {
       const tree = await runSchematic(
         'component',
-        { name: 'helloWorld', project: projectName, directory: 'foo' },
+        { name: 'helloWorld', project: projectName, directory: 'lib/foo' },
         appTree
       );
 
-      expect(tree.exists('/libs/my-lib/src/lib/foo/bar/faz/hello-world.tsx'));
+      expect(
+        tree.exists('/libs/my-lib/src/lib/foo/hello-world/hello-world.tsx')
+      );
+    });
+  });
+
+  describe('--flat', () => {
+    it('should create in project directory rather than in its own folder', async () => {
+      const tree = await runSchematic(
+        'component',
+        { name: 'hello', project: projectName, flat: true },
+        appTree
+      );
+
+      expect(tree.exists('/libs/my-lib/src/lib/hello.tsx'));
+    });
+    it('should work with custom directory path', async () => {
+      const tree = await runSchematic(
+        'component',
+        {
+          name: 'hello',
+          project: projectName,
+          flat: true,
+          directory: 'components',
+        },
+        appTree
+      );
+
+      expect(tree.exists('/libs/my-lib/src/components/hello.tsx'));
     });
   });
 });

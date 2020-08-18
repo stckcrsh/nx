@@ -10,7 +10,7 @@ import {
   createLib,
   getAppConfig,
   getLibConfig,
-  runSchematic
+  runSchematic,
 } from '../../utils/testing';
 import { createEmptyWorkspace } from '@nrwl/workspace/testing';
 
@@ -29,7 +29,9 @@ describe('ngrx', () => {
       {
         name: 'state',
         module: 'apps/myapp/src/app/app.module.ts',
-        onlyEmptyRoot: true
+        onlyEmptyRoot: true,
+        minimal: false,
+        root: true,
       },
       appTree
     );
@@ -54,7 +56,7 @@ describe('ngrx', () => {
         module: 'apps/myapp/src/app/app.module.ts',
         root: true,
         onlyEmptyRoot: false,
-        minimal: true
+        minimal: true,
       },
       appTree
     );
@@ -77,7 +79,8 @@ describe('ngrx', () => {
       {
         name: 'app',
         module: 'apps/myapp/src/app/app.module.ts',
-        root: true
+        root: true,
+        minimal: false,
       },
       appTree
     );
@@ -89,8 +92,8 @@ describe('ngrx', () => {
       '/apps/myapp/src/app/+state/app.reducer.ts',
       '/apps/myapp/src/app/+state/app.reducer.spec.ts',
       '/apps/myapp/src/app/+state/app.selectors.ts',
-      '/apps/myapp/src/app/+state/app.selectors.spec.ts'
-    ].forEach(fileName => {
+      '/apps/myapp/src/app/+state/app.selectors.spec.ts',
+    ].forEach((fileName) => {
       expect(tree.exists(fileName)).toBeTruthy();
     });
 
@@ -124,7 +127,8 @@ describe('ngrx', () => {
         name: 'app',
         module: 'apps/myapp/src/app/app.module.ts',
         root: true,
-        facade: true
+        facade: true,
+        minimal: false,
       },
       appTree
     );
@@ -151,8 +155,8 @@ describe('ngrx', () => {
       '/apps/myapp/src/app/+state/app.facade.ts',
       '/apps/myapp/src/app/+state/app.facade.spec.ts',
       '/apps/myapp/src/app/+state/app.selectors.ts',
-      '/apps/myapp/src/app/+state/app.selectors.spec.ts'
-    ].forEach(fileName => {
+      '/apps/myapp/src/app/+state/app.selectors.spec.ts',
+    ].forEach((fileName) => {
       expect(tree.exists(fileName)).toBeTruthy();
     });
   });
@@ -164,7 +168,7 @@ describe('ngrx', () => {
       {
         name: 'app',
         module: 'apps/myapp-norouter/src/app/app.module.ts',
-        root: true
+        root: true,
       },
       newTree
     );
@@ -180,7 +184,8 @@ describe('ngrx', () => {
       'ngrx',
       {
         name: 'state',
-        module: 'apps/myapp/src/app/app.module.ts'
+        module: 'apps/myapp/src/app/app.module.ts',
+        minimal: false,
       },
       appTree
     );
@@ -201,7 +206,8 @@ describe('ngrx', () => {
       {
         name: 'state',
         module: 'apps/myapp/src/app/app.module.ts',
-        directory: 'myCustomState'
+        directory: 'myCustomState',
+        minimal: false,
       },
       appTree
     );
@@ -223,7 +229,8 @@ describe('ngrx', () => {
         name: 'state',
         module: 'apps/myapp/src/app/app.module.ts',
         onlyAddFiles: true,
-        facade: true
+        facade: true,
+        minimal: false,
       },
       appTree
     );
@@ -239,8 +246,8 @@ describe('ngrx', () => {
       '/apps/myapp/src/app/+state/state.selectors.ts',
       '/apps/myapp/src/app/+state/state.effects.spec.ts',
       '/apps/myapp/src/app/+state/state.facade.spec.ts',
-      '/apps/myapp/src/app/+state/state.selectors.spec.ts'
-    ].forEach(fileName => {
+      '/apps/myapp/src/app/+state/state.selectors.spec.ts',
+    ].forEach((fileName) => {
       expect(tree.exists(fileName)).toBeTruthy();
     });
   });
@@ -253,7 +260,8 @@ describe('ngrx', () => {
         module: 'apps/myapp/src/app/app.module.ts',
         onlyAddFiles: false,
         skipImport: true,
-        facade: true
+        facade: true,
+        minimal: false,
       },
       appTree
     );
@@ -269,8 +277,8 @@ describe('ngrx', () => {
       '/apps/myapp/src/app/+state/state.selectors.ts',
       '/apps/myapp/src/app/+state/state.effects.spec.ts',
       '/apps/myapp/src/app/+state/state.facade.spec.ts',
-      '/apps/myapp/src/app/+state/state.selectors.spec.ts'
-    ].forEach(fileName => {
+      '/apps/myapp/src/app/+state/state.selectors.spec.ts',
+    ].forEach((fileName) => {
       expect(tree.exists(fileName)).toBeTruthy();
     });
   });
@@ -280,7 +288,7 @@ describe('ngrx', () => {
       'ngrx',
       {
         name: 'state',
-        module: 'apps/myapp/src/app/app.module.ts'
+        module: 'apps/myapp/src/app/app.module.ts',
       },
       appTree
     );
@@ -298,7 +306,7 @@ describe('ngrx', () => {
         'ngrx',
         {
           name: 'state',
-          module: ''
+          module: '',
         },
         appTree
       );
@@ -314,7 +322,7 @@ describe('ngrx', () => {
         'ngrx',
         {
           name: 'state',
-          module: 'does-not-exist.ts'
+          module: 'does-not-exist.ts',
         },
         appTree
       );
@@ -326,8 +334,8 @@ describe('ngrx', () => {
   describe('code generation', () => {
     it('should scaffold the ngrx "user" files without a facade', async () => {
       const appConfig = getAppConfig();
-      const hasFile = file => expect(tree.exists(file)).toBeTruthy();
-      const missingFile = file => expect(tree.exists(file)).not.toBeTruthy();
+      const hasFile = (file) => expect(tree.exists(file)).toBeTruthy();
+      const missingFile = (file) => expect(tree.exists(file)).not.toBeTruthy();
       const statePath = `${findModuleParent(appConfig.appModule)}/+state`;
 
       const tree = await buildNgrxTree(appConfig);
@@ -344,7 +352,7 @@ describe('ngrx', () => {
 
     it('should scaffold the ngrx "user" files WITH a facade', async () => {
       const appConfig = getAppConfig();
-      const hasFile = file => expect(tree.exists(file)).toBeTruthy();
+      const hasFile = (file) => expect(tree.exists(file)).toBeTruthy();
       const tree = await buildNgrxTree(appConfig, 'user', true);
       const statePath = `${findModuleParent(appConfig.appModule)}/+state`;
 
@@ -390,8 +398,8 @@ describe('ngrx', () => {
 
       [
         `import { USERS_FEATURE_KEY, UsersState } from './users.reducer'`,
-        `export const usersQuery`
-      ].forEach(text => {
+        `export const usersQuery`,
+      ].forEach((text) => {
         expect(content).toContain(text);
       });
     });
@@ -407,8 +415,8 @@ describe('ngrx', () => {
       [
         `import { UsersPartialState } from './users.reducer'`,
         `import { usersQuery } from './users.selectors'`,
-        `export class UsersFacade`
-      ].forEach(text => {
+        `export class UsersFacade`,
+      ].forEach((text) => {
         expect(content).toContain(text);
       });
     });
@@ -428,8 +436,8 @@ describe('ngrx', () => {
         'state: UserState = initialState',
         'action: UserAction',
         '): UserState',
-        'case UserActionTypes.UserLoaded'
-      ].forEach(text => {
+        'case UserActionTypes.UserLoaded',
+      ].forEach((text) => {
         expect(content).toContain(text);
       });
     });
@@ -447,15 +455,15 @@ import {
   LoadUsers,
   UsersLoaded,
   UsersLoadError,
-  UsersActionTypes
+  UsersActionTypes,
 } from './users.actions';`,
         `loadUsers$`,
         `run: (action: LoadUsers, state: UsersPartialState)`,
         `return new UsersLoaded([])`,
         `return new UsersLoadError(error)`,
         'private actions$: Actions',
-        'private dataPersistence: DataPersistence<UsersPartialState>'
-      ].forEach(text => {
+        'private dataPersistence: DataPersistence<UsersPartialState>',
+      ].forEach((text) => {
         expect(content).toContain(text);
       });
     });
@@ -483,7 +491,7 @@ import {
         {
           name: 'super-users',
           module: libConfig.module,
-          facade: true
+          facade: true,
         },
         appTree
       );
@@ -502,7 +510,7 @@ import {
         {
           name: 'super-users',
           module: libConfig.module,
-          facade: false
+          facade: false,
         },
         appTree
       );
@@ -519,7 +527,8 @@ import {
         'ngrx',
         {
           name: 'super-users',
-          module: appConfig.appModule
+          module: appConfig.appModule,
+          minimal: false,
         },
         appTree
       );
@@ -549,7 +558,9 @@ import {
           name: 'users',
           module: appConfig.appModule,
           syntax: 'creators',
-          facade: true
+          minimal: false,
+          facade: true,
+          useDataPersistance: false,
         },
         appTree
       );
@@ -565,8 +576,8 @@ import {
         '[Users] Load Users Success',
         'props<{ users: UsersEntity[] }>()',
         '[Users] Load Users Failure',
-        'props<{ error: any }>()'
-      ].forEach(text => {
+        'props<{ error: any }>()',
+      ].forEach((text) => {
         expect(content).toContain(text);
       });
     });
@@ -577,8 +588,8 @@ import {
       [
         `export const USERS_FEATURE_KEY = 'users';`,
         `const usersReducer = createReducer`,
-        'export function reducer(state: State | undefined, action: Action) {'
-      ].forEach(text => {
+        'export function reducer(state: State | undefined, action: Action) {',
+      ].forEach((text) => {
         expect(content).toContain(text);
       });
     });
@@ -588,8 +599,8 @@ import {
 
       [
         `import { createEffect, Actions, ofType } from '@ngrx/effects';`,
-        'this.dataPersistence.fetch(UsersActions.loadUsers, {'
-      ].forEach(text => {
+        'fetch({',
+      ].forEach((text) => {
         expect(content).toContain(text);
       });
     });
@@ -603,10 +614,10 @@ import {
   USERS_FEATURE_KEY,
   State,
   UsersPartialState,
-  usersAdapter
+  usersAdapter,
 } from './users.reducer';`,
-        `const { selectAll, selectEntities } = usersAdapter.getSelectors();`
-      ].forEach(text => {
+        `const { selectAll, selectEntities } = usersAdapter.getSelectors();`,
+      ].forEach((text) => {
         expect(content).toContain(text);
       });
     });
@@ -617,8 +628,8 @@ import {
       [
         `loaded$ = this.store.pipe(select(UsersSelectors.getUsersLoaded));`,
         `allUsers$ = this.store.pipe(select(UsersSelectors.getAllUsers));`,
-        `selectedUsers$ = this.store.pipe(select(UsersSelectors.getSelected));`
-      ].forEach(text => {
+        `selectedUsers$ = this.store.pipe(select(UsersSelectors.getSelected));`,
+      ].forEach((text) => {
         expect(content).toContain(text);
       });
     });
@@ -628,8 +639,8 @@ import {
 
       [
         'export interface UsersEntity',
-        'id: string | number; // Primary ID'
-      ].forEach(text => {
+        'id: string | number; // Primary ID',
+      ].forEach((text) => {
         expect(content).toContain(text);
       });
     });
@@ -645,14 +656,14 @@ import {
           module: appConfig.appModule,
           syntax: 'creators',
           facade: true,
-          useDataPersistence: false
+          minimal: false,
         },
         appTree
       );
       const content = tree.readContent(`${statePath}/users.effects.ts`);
 
       [`{ fetch }`, `, ofType`, `ofType(UsersActions.loadUsers),`].forEach(
-        text => {
+        (text) => {
           expect(content).toContain(text);
         }
       );
@@ -672,7 +683,7 @@ import {
           name: 'users',
           module: appConfig.appModule,
           syntax: 'creators',
-          barrels: true
+          barrels: true,
         },
         appTree
       );
@@ -684,8 +695,8 @@ import {
         `import * as UsersFeature from './lib/+state/users.reducer';`,
         `import * as UsersSelectors from './lib/+state/users.selectors';`,
         `export { UsersActions, UsersFeature, UsersSelectors };`,
-        `export * from './lib/+state/users.models';`
-      ].forEach(text => {
+        `export * from './lib/+state/users.models';`,
+      ].forEach((text) => {
         expect(content).toContain(text);
       });
     });
@@ -701,7 +712,10 @@ import {
       {
         name: featureName,
         module: appConfig.appModule,
-        facade: withFacade
+        facade: withFacade,
+        syntax: 'classes',
+        minimal: false,
+        useDataPersistance: true,
       },
       appTree
     );

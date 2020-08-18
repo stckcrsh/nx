@@ -23,7 +23,6 @@ describe('init', () => {
     expect(dependencies['@angular/platform-browser']).toBeDefined();
     expect(dependencies['@angular/platform-browser-dynamic']).toBeDefined();
     expect(dependencies['@angular/router']).toBeDefined();
-    expect(dependencies['core-js']).toBeDefined();
     expect(dependencies['rxjs']).toBeDefined();
     expect(dependencies['zone.js']).toBeDefined();
     expect(devDependencies['@angular/compiler-cli']).toBeDefined();
@@ -32,13 +31,29 @@ describe('init', () => {
     expect(devDependencies['codelyzer']).toBeDefined();
   });
 
+  it('should add a postinstall script for ngcc', async () => {
+    const tree = await runSchematic(
+      'init',
+      {
+        unitTestRunner: 'karma',
+      },
+      appTree
+    );
+
+    const packageJson = readJsonInTree(tree, 'package.json');
+
+    expect(packageJson.scripts.postinstall).toEqual(
+      'ngcc --properties es2015 browser module main --first-only --create-ivy-entry-points'
+    );
+  });
+
   describe('--unit-test-runner', () => {
     describe('karma', () => {
       it('should add karma dependencies', async () => {
         const tree = await runSchematic(
           'init',
           {
-            unitTestRunner: 'karma'
+            unitTestRunner: 'karma',
           },
           appTree
         );
@@ -59,7 +74,7 @@ describe('init', () => {
         const tree = await runSchematic(
           'init',
           {
-            unitTestRunner: 'karma'
+            unitTestRunner: 'karma',
           },
           appTree
         );
@@ -70,7 +85,7 @@ describe('init', () => {
         const tree = await runSchematic(
           'init',
           {
-            unitTestRunner: 'karma'
+            unitTestRunner: 'karma',
           },
           appTree
         );
@@ -89,7 +104,7 @@ describe('init', () => {
         const tree = await runSchematic(
           'init',
           {
-            unitTestRunner: 'jest'
+            unitTestRunner: 'jest',
           },
           appTree
         );
@@ -103,7 +118,7 @@ describe('init', () => {
         const tree = await runSchematic(
           'init',
           {
-            unitTestRunner: 'jest'
+            unitTestRunner: 'jest',
           },
           appTree
         );
@@ -114,7 +129,7 @@ describe('init', () => {
         const tree = await runSchematic(
           'init',
           {
-            unitTestRunner: 'jest'
+            unitTestRunner: 'jest',
           },
           appTree
         );
@@ -136,7 +151,7 @@ describe('init', () => {
           'init',
           {
             unitTestRunner: 'none',
-            e2eTestRunner: 'cypress'
+            e2eTestRunner: 'cypress',
           },
           appTree
         );
@@ -149,7 +164,7 @@ describe('init', () => {
         const tree = await runSchematic(
           'init',
           {
-            e2eTestRunner: 'cypress'
+            e2eTestRunner: 'cypress',
           },
           appTree
         );
@@ -165,7 +180,7 @@ describe('init', () => {
         const tree = await runSchematic(
           'init',
           {
-            e2eTestRunner: 'protractor'
+            e2eTestRunner: 'protractor',
           },
           appTree
         );
@@ -181,7 +196,7 @@ describe('init', () => {
         const tree = await runSchematic(
           'init',
           {
-            e2eTestRunner: 'protractor'
+            e2eTestRunner: 'protractor',
           },
           appTree
         );
@@ -198,38 +213,6 @@ describe('init', () => {
       const result = await runSchematic('init', {}, appTree);
       const workspaceJson = readJsonInTree(result, 'workspace.json');
       expect(workspaceJson.cli.defaultCollection).toEqual('@nrwl/angular');
-    });
-
-    it('should be set if @nrwl/workspace was set before', async () => {
-      appTree = await callRule(
-        updateJsonInTree('workspace.json', json => {
-          json.cli = {
-            defaultCollection: '@nrwl/workspace'
-          };
-
-          return json;
-        }),
-        appTree
-      );
-      const result = await runSchematic('init', {}, appTree);
-      const workspaceJson = readJsonInTree(result, 'workspace.json');
-      expect(workspaceJson.cli.defaultCollection).toEqual('@nrwl/angular');
-    });
-
-    it('should not be set if something else was set before', async () => {
-      appTree = await callRule(
-        updateJsonInTree('workspace.json', json => {
-          json.cli = {
-            defaultCollection: '@nrwl/react'
-          };
-
-          return json;
-        }),
-        appTree
-      );
-      const result = await runSchematic('init', {}, appTree);
-      const workspaceJson = readJsonInTree(result, 'workspace.json');
-      expect(workspaceJson.cli.defaultCollection).toEqual('@nrwl/react');
     });
   });
 });

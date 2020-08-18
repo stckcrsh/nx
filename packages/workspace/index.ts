@@ -4,26 +4,26 @@ export {
   toClassName,
   toFileName,
   names,
-  findModuleParent
+  findModuleParent,
 } from './src/utils/name-utils';
+export { ProjectType, projectRootDir } from './src/utils/project-type';
 export {
   serializeJson,
   renameSync,
   updateJsonFile,
   readJsonFile,
   readWorkspaceConfigPath,
-  copyFile
+  copyFile,
+  createDirectory,
 } from './src/utils/fileutils';
 export {
   offsetFromRoot,
   ExistingPrettierConfig,
-  resolveUserExistingPrettierConfig
+  resolveUserExistingPrettierConfig,
 } from './src/utils/common';
 export { output } from './src/utils/output';
-export {
-  commandsObject,
-  supportedNxCommands
-} from './src/command-line/nx-commands';
+export { commandsObject } from './src/command-line/nx-commands';
+export { supportedNxCommands } from './src/command-line/supported-nx-commands';
 export { readWorkspaceJson, readNxJson } from './src/core/file-utils';
 export { NxJson } from './src/core/shared-interfaces';
 export {
@@ -44,7 +44,13 @@ export {
   getProjectGraphFromHost,
   readWorkspace,
   renameSyncInTree,
-  renameDirSyncInTree
+  renameDirSyncInTree,
+  updateNxJsonInTree,
+  addProjectToNxJsonInTree,
+  readNxJsonInTree,
+  InsertChange,
+  ReplaceChange,
+  RemoveChange,
 } from './src/utils/ast-utils';
 
 export {
@@ -53,21 +59,21 @@ export {
   replaceAppNameWithPath,
   editTarget,
   parseTarget,
-  serializeTarget
+  serializeTarget,
 } from './src/utils/cli-config-utils';
 
 export { getWorkspace, updateWorkspace } from './src/utils/workspace';
 export { addUpdateTask } from './src/utils/update-task';
 export { addLintFiles, generateProjectLint, Linter } from './src/utils/lint';
 
+export { addInstallTask } from './src/utils/rules/add-install-task';
 export { formatFiles } from './src/utils/rules/format-files';
 export { deleteFile } from './src/utils/rules/deleteFile';
 export * from './src/utils/rules/ng-add';
 export { updateKarmaConf } from './src/utils/rules/update-karma-conf';
+export { setDefaultCollection } from './src/utils/rules/workspace';
 import * as strings from './src/utils/strings';
 export { checkAndCleanWithSemver } from './src/utils/version-utils';
-export {
-  updatePackagesInPackageJson
-} from './src/utils/update-packages-in-package-json';
+export { updatePackagesInPackageJson } from './src/utils/update-packages-in-package-json';
 
 export const stringUtils = strings;

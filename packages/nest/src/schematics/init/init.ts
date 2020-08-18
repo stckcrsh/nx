@@ -1,38 +1,37 @@
-import { chain, Rule } from '@angular-devkit/schematics';
+import { chain, noop, Rule } from '@angular-devkit/schematics';
 import {
   addDepsToPackageJson,
   addPackageWithInit,
   formatFiles,
+  setDefaultCollection,
   updateJsonInTree,
-  updateWorkspace
 } from '@nrwl/workspace';
 import { Schema } from './schema';
 import {
   nestJsSchematicsVersion,
   nestJsVersion,
   nxVersion,
-  reflectMetadataVersion
+  reflectMetadataVersion,
+  rxjsVersion,
 } from '../../utils/versions';
-import { JsonObject } from '@angular-devkit/core';
 
-export function addDependencies(): Rule {
-  return addDepsToPackageJson(
-    {
-      '@nestjs/common': nestJsVersion,
-      '@nestjs/core': nestJsVersion,
-      '@nestjs/platform-express': nestJsVersion,
-      'reflect-metadata': reflectMetadataVersion
-    },
-    {
-      '@nestjs/schematics': nestJsSchematicsVersion,
-      '@nestjs/testing': nestJsVersion,
-      '@nrwl/nest': nxVersion
-    }
-  );
-}
+export const updateDependencies = addDepsToPackageJson(
+  {
+    '@nestjs/common': nestJsVersion,
+    '@nestjs/core': nestJsVersion,
+    '@nestjs/platform-express': nestJsVersion,
+    'reflect-metadata': reflectMetadataVersion,
+    rxjs: rxjsVersion,
+  },
+  {
+    '@nestjs/schematics': nestJsSchematicsVersion,
+    '@nestjs/testing': nestJsVersion,
+    '@nrwl/nest': nxVersion,
+  }
+);
 
 function moveDependency(): Rule {
-  return updateJsonInTree('package.json', json => {
+  return updateJsonInTree('package.json', (json) => {
     json.dependencies = json.dependencies || {};
 
     delete json.dependencies['@nrwl/nest'];
@@ -40,27 +39,15 @@ function moveDependency(): Rule {
   });
 }
 
-function setDefault(): Rule {
-  return updateWorkspace(workspace => {
-    workspace.extensions.cli = workspace.extensions.cli || {};
-
-    const defaultCollection: string =
-      workspace.extensions.cli &&
-      ((workspace.extensions.cli as JsonObject).defaultCollection as string);
-
-    if (!defaultCollection || defaultCollection === '@nrwl/workspace') {
-      (workspace.extensions.cli as JsonObject).defaultCollection = '@nrwl/nest';
-    }
-  });
-}
-
-export default function(schema: Schema) {
+export default function (schema: Schema) {
   return chain([
-    setDefault(),
-    addPackageWithInit('@nrwl/node'),
-    addPackageWithInit('@nrwl/jest'),
-    addDependencies(),
+    setDefaultCollection('@nrwl/nest'),
+    addPackageWithInit('@nrwl/node', schema),
+    schema.unitTestRunner === 'jest'
+      ? addPackageWithInit('@nrwl/jest')
+      : noop(),
+    updateDependencies,
     moveDependency(),
-    formatFiles(schema)
+    formatFiles(schema),
   ]);
 }

@@ -1,54 +1,27 @@
 import { execSync } from 'child_process';
-import { output } from '../utils/output';
 import { createProjectGraph, ProjectGraphNode } from '../core/project-graph';
 import { NxJson } from '../core/shared-interfaces';
 import { readWorkspaceJson, TEN_MEGABYTES } from '../core/file-utils';
 import { NxArgs } from './utils';
-
-export function printArgsWarning(options: NxArgs) {
-  const { files, uncommitted, untracked, base, head, all } = options;
-
-  if (!files && !uncommitted && !untracked && !base && !head && !all) {
-    output.note({
-      title: `Affected criteria defaulted to --base=${output.bold(
-        'master'
-      )} --head=${output.bold('HEAD')}`
-    });
-  }
-
-  if (all) {
-    output.warn({
-      title: `Running affected:* commands with --all can result in very slow builds.`,
-      bodyLines: [
-        output.bold('--all') +
-          ' is not meant to be used for any sizable project or to be used in CI.',
-        '',
-        output.colors.gray(
-          'Learn more about checking only what is affected: '
-        ) + 'https://nx.dev/guides/monorepo-affected.'
-      ]
-    });
-  }
-}
 
 export function parseFiles(options: NxArgs): { files: string[] } {
   const { files, uncommitted, untracked, base, head } = options;
 
   if (files) {
     return {
-      files
+      files,
     };
   } else if (uncommitted) {
     return {
-      files: getUncommittedFiles()
+      files: getUncommittedFiles(),
     };
   } else if (untracked) {
     return {
-      files: getUntrackedFiles()
+      files: getUntrackedFiles(),
     };
   } else if (base && head) {
     return {
-      files: getFilesUsingBaseAndHead(base, head)
+      files: getFilesUsingBaseAndHead(base, head),
     };
   } else if (base) {
     return {
@@ -56,9 +29,9 @@ export function parseFiles(options: NxArgs): { files: string[] } {
         new Set([
           ...getFilesUsingBaseAndHead(base, 'HEAD'),
           ...getUncommittedFiles(),
-          ...getUntrackedFiles()
+          ...getUntrackedFiles(),
         ])
-      )
+      ),
     };
   }
 }
@@ -73,7 +46,7 @@ function getUntrackedFiles(): string[] {
 
 function getFilesUsingBaseAndHead(base: string, head: string): string[] {
   const mergeBase = execSync(`git merge-base ${base} ${head}`, {
-    maxBuffer: TEN_MEGABYTES
+    maxBuffer: TEN_MEGABYTES,
   })
     .toString()
     .trim();
@@ -84,8 +57,8 @@ function parseGitOutput(command: string): string[] {
   return execSync(command, { maxBuffer: TEN_MEGABYTES })
     .toString('utf-8')
     .split('\n')
-    .map(a => a.trim())
-    .filter(a => a.length > 0);
+    .map((a) => a.trim())
+    .filter((a) => a.length > 0);
 }
 
 // TODO: remove it in Nx 10
@@ -99,5 +72,5 @@ export function getProjectNodes(
 
 export function getProjectRoots(projectNames: string[]): string[] {
   const { projects } = readWorkspaceJson();
-  return projectNames.map(name => projects[name].root);
+  return projectNames.map((name) => projects[name].root);
 }

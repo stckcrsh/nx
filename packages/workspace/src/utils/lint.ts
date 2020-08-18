@@ -3,7 +3,7 @@ import {
   chain,
   Rule,
   Tree,
-  SchematicContext
+  SchematicContext,
 } from '@angular-devkit/schematics';
 import { addDepsToPackageJson } from './ast-utils';
 import { offsetFromRoot } from './common';
@@ -11,13 +11,13 @@ import {
   eslintVersion,
   typescriptESLintVersion,
   eslintConfigPrettierVersion,
-  nxVersion
+  nxVersion,
 } from './versions';
 
 export const enum Linter {
   TsLint = 'tslint',
   EsLint = 'eslint',
-  None = 'none'
+  None = 'none',
 }
 
 export function generateProjectLint(
@@ -30,18 +30,20 @@ export function generateProjectLint(
       builder: '@angular-devkit/build-angular:tslint',
       options: {
         tsConfig: [tsConfigPath],
-        exclude: ['**/node_modules/**', '!' + projectRoot + '/**']
-      }
+        exclude: ['**/node_modules/**', '!' + projectRoot + '/**/*'],
+      },
     };
   } else if (linter === Linter.EsLint) {
     return {
       builder: '@nrwl/linter:lint',
       options: {
+        // No config option here because eslint resolve them automatically.
+        // By not specifying a config option we allow eslint to support
+        // nested configurations.
         linter: 'eslint',
-        config: projectRoot + '/.eslintrc',
         tsConfig: [tsConfigPath],
-        exclude: ['**/node_modules/**', '!' + projectRoot + '/**']
-      }
+        exclude: ['**/node_modules/**', '!' + projectRoot + '/**/*'],
+      },
     };
   } else {
     return undefined;
@@ -68,67 +70,87 @@ export function addLintFiles(
       );
     }
 
+    const chainedCommands = [];
+
     if (linter === 'tslint') {
-      if (!host.exists('/tslint.json')) {
-        host.create('/tslint.json', globalTsLint);
-      }
-      if (!options.onlyGlobal) {
-        host.create(
-          join(projectRoot as any, `tslint.json`),
-          JSON.stringify({
-            extends: `${offsetFromRoot(projectRoot)}tslint.json`,
-            rules: {}
-          })
-        );
-      }
-      return;
+      chainedCommands.push((host: Tree) => {
+        if (!host.exists('/tslint.json')) {
+          host.create('/tslint.json', globalTsLint);
+        }
+        if (!options.onlyGlobal) {
+          host.create(
+            join(projectRoot as any, `tslint.json`),
+            JSON.stringify({
+              extends: `${offsetFromRoot(projectRoot)}tslint.json`,
+              // Include project files to be linted since the global one excludes all files.
+              linterOptions: {
+                exclude: ['!**/*'],
+              },
+              rules: {},
+            })
+          );
+        }
+      });
+
+      return chain(chainedCommands);
     }
 
     if (linter === 'eslint') {
       if (!host.exists('/.eslintrc')) {
-        host.create('/.eslintrc', globalESLint);
-        addDepsToPackageJson(
-          {
-            ...(options.extraPackageDeps
-              ? options.extraPackageDeps.dependencies
-              : {})
-          },
-          {
-            '@nrwl/eslint-plugin-nx': nxVersion,
-            '@typescript-eslint/parser': typescriptESLintVersion,
-            '@typescript-eslint/eslint-plugin': typescriptESLintVersion,
-            eslint: eslintVersion,
-            'eslint-config-prettier': eslintConfigPrettierVersion,
-            ...(options.extraPackageDeps
-              ? options.extraPackageDeps.devDependencies
-              : {})
-          }
-        )(host, context);
+        chainedCommands.push((host: Tree) => {
+          host.create('/.eslintrc', globalESLint);
+
+          return addDepsToPackageJson(
+            {
+              ...(options.extraPackageDeps
+                ? options.extraPackageDeps.dependencies
+                : {}),
+            },
+            {
+              '@nrwl/eslint-plugin-nx': nxVersion,
+              '@typescript-eslint/parser': typescriptESLintVersion,
+              '@typescript-eslint/eslint-plugin': typescriptESLintVersion,
+              eslint: eslintVersion,
+              'eslint-config-prettier': eslintConfigPrettierVersion,
+              ...(options.extraPackageDeps
+                ? options.extraPackageDeps.devDependencies
+                : {}),
+            }
+          );
+        });
       }
+
       if (!options.onlyGlobal) {
-        let configJson;
-        const rootConfig = `${offsetFromRoot(projectRoot)}.eslintrc`;
-        if (options.localConfig) {
-          const extendsOption = options.localConfig.extends
-            ? Array.isArray(options.localConfig.extends)
-              ? options.localConfig.extends
-              : [options.localConfig.extends]
-            : [];
-          configJson = {
-            ...options.localConfig,
-            extends: [...extendsOption, rootConfig]
-          };
-        } else {
-          configJson = {
-            extends: rootConfig,
-            rules: {}
-          };
-        }
-        host.create(
-          join(projectRoot as any, `.eslintrc`),
-          JSON.stringify(configJson)
-        );
+        chainedCommands.push((host: Tree) => {
+          let configJson;
+          const rootConfig = `${offsetFromRoot(projectRoot)}.eslintrc`;
+          if (options.localConfig) {
+            const extendsOption = options.localConfig.extends
+              ? Array.isArray(options.localConfig.extends)
+                ? options.localConfig.extends
+                : [options.localConfig.extends]
+              : [];
+            configJson = {
+              rules: {},
+              ...options.localConfig,
+              extends: [...extendsOption, rootConfig],
+            };
+          } else {
+            configJson = {
+              extends: rootConfig,
+              rules: {},
+            };
+          }
+          // Include all project files to be linted (since they are turned off in the root eslintrc file).
+          configJson.ignorePatterns = ['!**/*'];
+          host.create(
+            join(projectRoot as any, `.eslintrc`),
+            JSON.stringify(configJson)
+          );
+        });
       }
+
+      return chain(chainedCommands);
     }
   };
 }
@@ -136,6 +158,9 @@ export function addLintFiles(
 const globalTsLint = `
 {
   "rulesDirectory": ["node_modules/@nrwl/workspace/src/tslint"],
+  "linterOptions": {
+    "exclude": ["**/*"]
+  },
   "rules": {
     "arrow-return-shorthand": true,
     "callable-types": true,
@@ -187,6 +212,7 @@ const globalTsLint = `
     "nx-enforce-module-boundaries": [
       true,
       {
+        "enforceBuildableLibDependency": true,
         "allow": [],
         "depConstraints": [
           { "sourceTag": "*", "onlyDependOnLibsWithTags": ["*"] }
@@ -204,8 +230,9 @@ const globalESLint = `
   "parserOptions": {
     "ecmaVersion": 2018,
     "sourceType": "module",
-    "project": "./tsconfig.json"
+    "project": "./tsconfig.*?.json"
   },
+  "ignorePatterns": ["**/*"],
   "plugins": ["@typescript-eslint", "@nrwl/nx"],
   "extends": [
     'eslint:recommended',
@@ -221,6 +248,7 @@ const globalESLint = `
     "@nrwl/nx/enforce-module-boundaries": [
       "error",
       {
+        "enforceBuildableLibDependency": true,
         "allow": [],
         "depConstraints": [
           { "sourceTag": "*", "onlyDependOnLibsWithTags": ["*"] }

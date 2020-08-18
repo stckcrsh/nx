@@ -34,23 +34,7 @@ Generate apps/myorg/myapp and apps/myorg/myapp-e2e:
 nx g app myapp --directory=myorg
 ```
 
-Use class components instead of functional components:
-
-```bash
-nx g app myapp --classComponent
-```
-
 ## Options
-
-### classComponent
-
-Alias(es): C
-
-Default: `false`
-
-Type: `boolean`
-
-Use class components instead of functional component
 
 ### directory
 
@@ -72,7 +56,7 @@ Test runner to use for end to end (e2e) tests
 
 ### linter
 
-Default: `tslint`
+Default: `eslint`
 
 Type: `string`
 
@@ -85,16 +69,6 @@ The tool to use for running lint checks.
 Type: `string`
 
 The name of the application.
-
-### pascalCaseFiles
-
-Alias(es): P
-
-Default: `false`
-
-Type: `boolean`
-
-Use pascal case component file name (e.g. App.tsx)
 
 ### server
 
@@ -126,7 +100,7 @@ Default: `css`
 
 Type: `string`
 
-Possible values: `css`, `scss`, `styl`, `less`, `styled-components`, `@emotion/styled`
+Possible values: `css`, `scss`, `styl`, `less`, `styled-components`, `@emotion/styled`, `styled-jsx`
 
 The file extension to be used for style files.
 

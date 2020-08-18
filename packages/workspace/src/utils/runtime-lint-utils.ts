@@ -1,12 +1,13 @@
+import { normalize } from '@angular-devkit/core';
 import * as path from 'path';
+import { FileData } from '../core/file-utils';
 import {
   DependencyType,
-  ProjectGraphNode,
+  ProjectGraph,
   ProjectGraphDependency,
-  ProjectGraph
+  ProjectGraphNode,
 } from '../core/project-graph';
-import { normalize } from '@angular-devkit/core';
-import { FileData, normalizedProjectRoot } from '../core/file-utils';
+import { TargetProjectLocator } from '../core/target-project-locator';
 
 export type Deps = { [projectName: string]: ProjectGraphDependency[] };
 export type DepConstraint = {
@@ -15,7 +16,7 @@ export type DepConstraint = {
 };
 
 export function hasNoneOfTheseTags(proj: ProjectGraphNode, tags: string[]) {
-  return tags.filter(allowedTag => hasTag(proj, allowedTag)).length === 0;
+  return tags.filter((allowedTag) => hasTag(proj, allowedTag)).length === 0;
 }
 
 function hasTag(proj: ProjectGraphNode, tag: string) {
@@ -27,7 +28,7 @@ function containsFile(
   targetFileWithoutExtension: string
 ): boolean {
   return !!files.filter(
-    f => removeExt(f.file) === targetFileWithoutExtension
+    (f) => removeExt(f.file) === targetFileWithoutExtension
   )[0];
 }
 
@@ -40,9 +41,7 @@ function removeWindowsDriveLetter(osSpecificPath: string): string {
 }
 
 function normalizePath(osSpecificPath: string): string {
-  return removeWindowsDriveLetter(osSpecificPath)
-    .split(path.sep)
-    .join('/');
+  return removeWindowsDriveLetter(osSpecificPath).split(path.sep).join('/');
 }
 
 export function matchImportWithWildcard(
@@ -89,7 +88,7 @@ export function isRelativeImportIntoAnotherProject(
 }
 
 export function findProjectUsingFile(projectGraph: ProjectGraph, file: string) {
-  return Object.values(projectGraph.nodes).filter(n =>
+  return Object.values(projectGraph.nodes).filter((n) =>
     containsFile(n.data.files, file)
   )[0];
 }
@@ -123,6 +122,7 @@ export function findTargetProject(
 }
 
 export function isAbsoluteImportIntoAnotherProject(imp: string) {
+  // TODO: vsavkin: check if this needs to be fixed once we generalize lint rules
   return (
     imp.startsWith('libs/') ||
     imp.startsWith('/libs/') ||
@@ -133,25 +133,17 @@ export function isAbsoluteImportIntoAnotherProject(imp: string) {
 
 export function findProjectUsingImport(
   projectGraph: ProjectGraph,
-  npmScope: string,
-  imp: string
+  targetProjectLocator: TargetProjectLocator,
+  filePath: string,
+  imp: string,
+  npmScope: string
 ) {
-  const unscopedImport = imp.substring(npmScope.length + 2);
-  let bestMatchedRoot: string = '';
-  let bestMatch: ProjectGraphNode = undefined;
-  Object.values(projectGraph.nodes).forEach(n => {
-    const normalizedRoot = normalizedProjectRoot(n);
-    if (
-      unscopedImport === normalizedRoot ||
-      unscopedImport.startsWith(`${normalizedRoot}/`)
-    ) {
-      if (normalizedRoot.length > bestMatchedRoot.length) {
-        bestMatchedRoot = normalizedRoot;
-        bestMatch = n;
-      }
-    }
-  });
-  return bestMatch;
+  const target = targetProjectLocator.findProjectWithImport(
+    imp,
+    filePath,
+    npmScope
+  );
+  return projectGraph.nodes[target];
 }
 
 export function isCircular(
@@ -172,22 +164,22 @@ function isDependingOn(
   if (done[sourceProjectName]) return false;
   if (!graph.dependencies[sourceProjectName]) return false;
   return graph.dependencies[sourceProjectName]
-    .map(dep =>
+    .map((dep) =>
       dep.target === targetProjectName
         ? true
         : isDependingOn(graph, dep.target, targetProjectName, {
             ...done,
-            [`${sourceProjectName}`]: true
+            [`${sourceProjectName}`]: true,
           })
     )
-    .some(result => result);
+    .some((result) => result);
 }
 
 export function findConstraintsFor(
   depConstraints: DepConstraint[],
   sourceProject: ProjectGraphNode
 ) {
-  return depConstraints.filter(f => hasTag(sourceProject, f.sourceTag));
+  return depConstraints.filter((f) => hasTag(sourceProject, f.sourceTag));
 }
 
 export function onlyLoadChildren(
@@ -198,12 +190,12 @@ export function onlyLoadChildren(
 ) {
   if (visited.indexOf(sourceProjectName) > -1) return false;
   return (
-    (graph.dependencies[sourceProjectName] || []).filter(d => {
+    (graph.dependencies[sourceProjectName] || []).filter((d) => {
       if (d.type !== DependencyType.dynamic) return false;
       if (d.target === targetProjectName) return true;
       return onlyLoadChildren(graph, d.target, targetProjectName, [
         ...visited,
-        sourceProjectName
+        sourceProjectName,
       ]);
     }).length > 0
   );
@@ -211,4 +203,19 @@ export function onlyLoadChildren(
 
 export function getSourceFilePath(sourceFileName: string, projectPath: string) {
   return normalize(sourceFileName).substring(projectPath.length + 1);
+}
+
+/**
+ * Verifies whether the given node has an architect builder attached
+ * @param projectGraph the node to verify
+ */
+export function hasArchitectBuildBuilder(
+  projectGraph: ProjectGraphNode
+): boolean {
+  return (
+    // can the architect not be defined? real use case?
+    projectGraph.data.architect &&
+    projectGraph.data.architect.build &&
+    projectGraph.data.architect.build.builder !== ''
+  );
 }

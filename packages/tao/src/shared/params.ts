@@ -1,11 +1,18 @@
-import { logging } from '@angular-devkit/core';
+import { logging, strings } from '@angular-devkit/core';
 import { UnsuccessfulWorkflowExecution } from '@angular-devkit/schematics';
-import levenshtein = require('fast-levenshtein');
+import { ParsedArgs } from 'minimist';
 
 export type Schema = {
-  properties: { [p: string]: any };
-  required: string[];
-  description: string;
+  properties: {
+    [p: string]: {
+      type: string;
+      alias?: string;
+      description?: string;
+      default?: string | number | boolean | string[];
+    };
+  };
+  required?: string[];
+  description?: string;
 };
 
 export type Unmatched = {
@@ -15,7 +22,7 @@ export type Unmatched = {
 
 export type Options = {
   '--'?: Unmatched[];
-  [k: string]: any;
+  [k: string]: string | number | boolean | string[] | Unmatched[];
 };
 
 export async function handleErrors(
@@ -38,12 +45,6 @@ export async function handleErrors(
   }
 }
 
-export function convertToCamelCase(parsed: Options): Options {
-  return Object.keys(parsed).reduce(
-    (m, c) => ({ ...m, [camelCase(c)]: parsed[c] }),
-    {}
-  );
-}
 function camelCase(input: string): string {
   if (input.indexOf('-') > 1) {
     return input
@@ -54,6 +55,13 @@ function camelCase(input: string): string {
   }
 }
 
+export function convertToCamelCase(parsed: ParsedArgs): Options {
+  return Object.keys(parsed).reduce(
+    (m, c) => ({ ...m, [camelCase(c)]: parsed[c] }),
+    {}
+  );
+}
+
 /**
  * Coerces (and replaces) options identified as 'boolean' or 'number' in the Schema
  *
@@ -62,11 +70,13 @@ function camelCase(input: string): string {
  *
  */
 export function coerceTypes(opts: Options, schema: Schema): Options {
-  Object.keys(opts).forEach(k => {
+  Object.keys(opts).forEach((k) => {
     if (schema.properties[k] && schema.properties[k].type == 'boolean') {
       opts[k] = opts[k] === true || opts[k] === 'true';
     } else if (schema.properties[k] && schema.properties[k].type == 'number') {
       opts[k] = Number(opts[k]);
+    } else if (schema.properties[k] && schema.properties[k].type == 'array') {
+      opts[k] = opts[k].toString().split(',');
     }
   });
   return opts;
@@ -79,7 +89,11 @@ export function coerceTypes(opts: Options, schema: Schema): Options {
  * @param opts The options passed in by the user
  * @param schema The schema definition to check against
  */
-export function convertAliases(opts: Options, schema: Schema): Options {
+export function convertAliases(
+  opts: Options,
+  schema: Schema,
+  excludeUnmatched: boolean
+): Options {
   return Object.keys(opts).reduce((acc, k) => {
     if (schema.properties[k]) {
       acc[k] = opts[k];
@@ -89,14 +103,16 @@ export function convertAliases(opts: Options, schema: Schema): Options {
       );
       if (found) {
         acc[found[0]] = opts[k];
-      } else {
+      } else if (excludeUnmatched) {
         if (!acc['--']) {
           acc['--'] = [];
         }
         acc['--'].push({
           name: k,
-          possible: []
+          possible: [],
         });
+      } else {
+        acc[k] = opts[k];
       }
     }
     return acc;
@@ -114,30 +130,11 @@ export function lookupUnmatched(opts: Options, schema: Schema): Options {
   if (opts['--']) {
     const props = Object.keys(schema.properties);
 
-    opts['--'].forEach(unmatched => {
+    opts['--'].forEach((unmatched) => {
       unmatched.possible = props.filter(
-        p => levenshtein.get(p, unmatched.name) < 3
+        (p) => strings.levenshtein(p, unmatched.name) < 3
       );
     });
   }
   return opts;
-}
-
-/**
- * Converts aliases and coerces types according to the schema
- *
- * @param opts The options to check
- * @param schema The schema definition to validate against
- *
- * @remarks
- *
- * Unmatched options are added to opts['--']
- * and listed along with possible schema matches
- *
- */
-export function validateOptions(opts: Options, schema: Schema): Options {
-  return lookupUnmatched(
-    convertAliases(coerceTypes(opts, schema), schema),
-    schema
-  );
 }

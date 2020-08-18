@@ -2,6 +2,7 @@ import { Tree } from '@angular-devkit/schematics';
 import { SchematicTestRunner } from '@angular-devkit/schematics/testing';
 import * as path from 'path';
 import { createEmptyWorkspace } from '@nrwl/workspace/testing';
+import { join } from 'path';
 
 describe('Update 8-10-0', () => {
   let tree: Tree;
@@ -14,6 +15,11 @@ describe('Update 8-10-0', () => {
       '@nrwl/react',
       path.join(__dirname, '../../../migrations.json')
     );
+
+    schematicRunner.registerCollection(
+      '@nrwl/cypress',
+      join(__dirname, '../../../../cypress/collection.json')
+    );
   });
 
   it('should remove @nwrl/react/typings/svg.d.ts from tsconfig', async () => {
@@ -21,6 +27,17 @@ describe('Update 8-10-0', () => {
       '@nrwl/react',
       path.join(__dirname, '../../../collection.json')
     );
+
+    reactRunner.registerCollection(
+      '@nrwl/jest',
+      join(__dirname, '../../../../jest/collection.json')
+    );
+
+    reactRunner.registerCollection(
+      '@nrwl/cypress',
+      join(__dirname, '../../../../cypress/collection.json')
+    );
+
     tree = await reactRunner
       .runSchematicAsync('app', { name: 'demo' }, tree)
       .toPromise();
@@ -34,8 +51,8 @@ describe('Update 8-10-0', () => {
         files: [
           '../../node_modules/@nrwl/react/typings/cssmodule.d.ts',
           '../../node_modules/@nrwl/react/typings/image.d.ts',
-          '../../node_modules/@nrwl/react/typings/svg.d.ts'
-        ]
+          '../../node_modules/@nrwl/react/typings/svg.d.ts',
+        ],
       })
     );
 
@@ -47,7 +64,7 @@ describe('Update 8-10-0', () => {
 
     expect(tsConfig.files).toEqual([
       '../../node_modules/@nrwl/react/typings/cssmodule.d.ts',
-      '../../node_modules/@nrwl/react/typings/image.d.ts'
+      '../../node_modules/@nrwl/react/typings/image.d.ts',
     ]);
   });
 });

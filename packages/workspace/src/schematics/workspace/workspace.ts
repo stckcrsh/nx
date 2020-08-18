@@ -3,27 +3,61 @@ import {
   branchAndMerge,
   chain,
   mergeWith,
+  noop,
   Rule,
   SchematicContext,
   template,
   Tree,
-  url
+  url,
 } from '@angular-devkit/schematics';
 import { Schema } from './schema';
-import { strings } from '@angular-devkit/core';
+import { join, strings } from '@angular-devkit/core';
 import {
   angularCliVersion,
+  eslintVersion,
+  nxVersion,
   prettierVersion,
   typescriptVersion,
-  eslintVersion,
-  nxVersion
 } from '../../utils/versions';
+import { readFileSync } from 'fs';
+import { join as pathJoin } from 'path';
+import { updateJsonInTree } from '@nrwl/workspace';
 
 export const DEFAULT_NRWL_PRETTIER_CONFIG = {
-  singleQuote: true
+  singleQuote: true,
 };
 
-export default function(options: Schema): Rule {
+const decorateAngularClI = (host: Tree) => {
+  const decorateCli = readFileSync(
+    pathJoin(__dirname as any, '..', 'utils', 'decorate-angular-cli.js__tmpl__')
+  ).toString();
+  host.create('decorate-angular-cli.js', decorateCli);
+};
+
+function setWorkspaceLayoutProperties(options: Schema) {
+  return updateJsonInTree('nx.json', (json) => {
+    if (options.layout === 'packages') {
+      json.workspaceLayout = {
+        appsDir: 'packages',
+        libsDir: 'packages',
+      };
+    }
+    return json;
+  });
+}
+
+function createAppsAndLibsFolders(options: Schema) {
+  return (host: Tree) => {
+    if (options.layout === 'packages') {
+      host.create('packages/.gitkeep', '');
+    } else {
+      host.create('apps/.gitkeep', '');
+      host.create('libs/.gitkeep', '');
+    }
+  };
+}
+
+export default function (options: Schema): Rule {
   if (!options.name) {
     throw new Error(`Invalid options, "name" is required.`);
   }
@@ -50,12 +84,18 @@ export default function(options: Schema): Rule {
           DEFAULT_NRWL_PRETTIER_CONFIG,
           null,
           2
-        )
-      })
+        ),
+      }),
     ]);
-    return chain([branchAndMerge(chain([mergeWith(templateSource)]))])(
-      host,
-      context
-    );
+    return chain([
+      branchAndMerge(
+        chain([
+          mergeWith(templateSource),
+          options.cli === 'angular' ? decorateAngularClI : noop(),
+          setWorkspaceLayoutProperties(options),
+          createAppsAndLibsFolders(options),
+        ])
+      ),
+    ])(host, context);
   };
 }

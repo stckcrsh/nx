@@ -9,4 +9,6 @@ export interface Schema {
   simpleModuleName: boolean;
   unitTestRunner: 'jest' | 'none';
   linter: Linter;
+  testEnvironment: 'jsdom' | 'node';
+  importPath?: string;
 }

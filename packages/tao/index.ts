@@ -50,7 +50,7 @@ export async function invokeCommand(
     case '--help':
       return (await import('./src/commands/help')).help();
 
-    default:
+    default: {
       const projectNameIncluded =
         commandArgs[0] && !commandArgs[0].startsWith('-');
       const projectName = projectNameIncluded ? commandArgs[0] : '';
@@ -59,10 +59,11 @@ export async function invokeCommand(
         root,
         [
           `${projectName}:${command}`,
-          ...(projectNameIncluded ? commandArgs.slice(1) : commandArgs)
+          ...(projectNameIncluded ? commandArgs.slice(1) : commandArgs),
         ],
         isVerbose
       );
+    }
   }
 }
 

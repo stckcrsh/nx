@@ -6,16 +6,17 @@ const fs = require('fs');
 const path = require('path');
 
 const parsedArgs = yargsParser(process.argv, {
-  boolean: ['dry-run', 'nobazel'],
+  boolean: ['dry-run', 'nobazel', 'local'],
   alias: {
     d: 'dry-run',
-    h: 'help'
-  }
+    h: 'help',
+    l: 'local',
+  },
 });
 
 console.log('parsedArgs', parsedArgs);
 
-if (!process.env.GITHUB_TOKEN_RELEASE_IT_NX) {
+if (!parsedArgs.local && !process.env.GITHUB_TOKEN_RELEASE_IT_NX) {
   console.error('process.env.GITHUB_TOKEN_RELEASE_IT_NX is not set');
   process.exit(1);
 }
@@ -35,6 +36,7 @@ if (parsedArgs.help) {
       Options:
         --dry-run           Do not touch or write anything, but show the commands
         --help              Show this message
+        --local             Publish to local npm registry (IMPORTANT: install & run Verdaccio first & set registry in .npmrc)
 
     `);
   process.exit(0);
@@ -42,7 +44,7 @@ if (parsedArgs.help) {
 
 console.log('> git fetch --all');
 childProcess.execSync('git fetch --all', {
-  stdio: [0, 1, 2]
+  stdio: [0, 1, 2],
 });
 
 function parseVersion(version) {
@@ -50,7 +52,7 @@ function parseVersion(version) {
     return {
       version,
       isValid: false,
-      isPrerelease: false
+      isPrerelease: false,
     };
   }
   const sections = version.split('-');
@@ -62,7 +64,7 @@ function parseVersion(version) {
     return {
       version,
       isValid: !!sections[0].match(/\d+\.\d+\.\d+$/),
-      isPrerelease: false
+      isPrerelease: false,
     };
   }
   /**
@@ -76,7 +78,7 @@ function parseVersion(version) {
       sections[0].match(/\d+\.\d+\.\d+$/) &&
       sections[1].match(/(alpha|beta|rc)\.\d+$/)
     ),
-    isPrerelease: true
+    isPrerelease: true,
   };
 }
 
@@ -104,23 +106,23 @@ console.log('Executing build script:');
 const buildCommand = `./scripts/package.sh ${parsedVersion.version} ${cliVersion} ${typescriptVersion} ${prettierVersion}`;
 console.log(`> ${buildCommand}`);
 childProcess.execSync(buildCommand, {
-  stdio: [0, 1, 2]
+  stdio: [0, 1, 2],
 });
 
 /**
  * Create working directory and copy over built packages
  */
 childProcess.execSync('rm -rf build/npm && mkdir -p build/npm', {
-  stdio: [0, 1, 2]
+  stdio: [0, 1, 2],
 });
 childProcess.execSync('cp -R build/packages/* build/npm', {
-  stdio: [0, 1, 2]
+  stdio: [0, 1, 2],
 });
 /**
  * Get rid of tarballs at top of copied directory (made with npm pack)
  */
 childProcess.execSync(`find build/npm -maxdepth 1 -name "*.tgz" -delete`, {
-  stdio: [0, 1, 2]
+  stdio: [0, 1, 2],
 });
 
 /**
@@ -130,6 +132,28 @@ childProcess.execSync(`find build/npm -maxdepth 1 -name "*.tgz" -delete`, {
  */
 const DRY_RUN = !!parsedArgs['dry-run'];
 
+const pkgFiles = [
+  'package.json',
+  'build/npm/create-nx-workspace/package.json',
+  'build/npm/create-nx-plugin/package.json',
+  'build/npm/jest/package.json',
+  'build/npm/cypress/package.json',
+  'build/npm/storybook/package.json',
+  'build/npm/angular/package.json',
+  'build/npm/react/package.json',
+  'build/npm/next/package.json',
+  'build/npm/web/package.json',
+  'build/npm/node/package.json',
+  'build/npm/express/package.json',
+  'build/npm/nest/package.json',
+  'build/npm/workspace/package.json',
+  'build/npm/cli/package.json',
+  'build/npm/tao/package.json',
+  'build/npm/eslint-plugin-nx/package.json',
+  'build/npm/linter/package.json',
+  'build/npm/nx-plugin/package.json',
+  'build/npm/nx/package.json',
+];
 /**
  * Set the static options for release-it
  */
@@ -145,77 +169,71 @@ const options = {
    * All the package.json files that will have their version updated
    * by release-it
    */
-  pkgFiles: [
-    'package.json',
-    'build/npm/schematics/package.json',
-    'build/npm/create-nx-workspace/package.json',
-    'build/npm/jest/package.json',
-    'build/npm/cypress/package.json',
-    'build/npm/storybook/package.json',
-    'build/npm/angular/package.json',
-    'build/npm/react/package.json',
-    'build/npm/next/package.json',
-    'build/npm/web/package.json',
-    'build/npm/node/package.json',
-    'build/npm/express/package.json',
-    'build/npm/nest/package.json',
-    'build/npm/workspace/package.json',
-    'build/npm/cli/package.json',
-    'build/npm/tao/package.json',
-    'build/npm/eslint-plugin-nx/package.json',
-    'build/npm/linter/package.json',
-    'build/npm/insights/package.json'
-  ],
+  pkgFiles: pkgFiles,
   increment: parsedVersion.version,
   requireUpstream: false,
   github: {
     preRelease: parsedVersion.isPrerelease,
     release: true,
+    assets: [],
     /**
      * The environment variable containing a valid GitHub
      * auth token with "repo" access (no other permissions required)
      */
-    token: process.env.GITHUB_TOKEN_RELEASE_IT_NX
+    token: !parsedArgs.local
+      ? process.env.GITHUB_TOKEN_RELEASE_IT_NX
+      : 'dummy-gh-token',
   },
   npm: {
     /**
      * We don't use release-it to do the npm publish, because it is not
      * able to understand our multi-package setup.
      */
-    release: false
+    release: false,
   },
-  requireCleanWorkingDir: false
+  requireCleanWorkingDir: false,
 };
 
-releaseIt(options)
-  .then(output => {
-    if (DRY_RUN) {
-      console.warn('WARNING: In DRY_RUN mode - not running publishing script');
-      process.exit(0);
-      return;
-    }
+childProcess.execSync('rm -rf ./build/packages/bazel');
+childProcess.execSync('rm -rf ./build/npm/bazel');
 
-    // if (parsedArgs.nobazel) {
-    childProcess.execSync('rm -rf ./build/packages/bazel');
-    childProcess.execSync('rm -rf ./build/npm/bazel');
-    // }
-
-    /**
-     * We always use either "latest" or "next" (i.e. no separate tags for alpha, beta etc)
-     */
-    const npmTag = parsedVersion.isPrerelease ? 'next' : 'latest';
-    const npmPublishCommand = `./scripts/publish.sh ${output.version} ${npmTag}`;
-    console.log('Executing publishing script for all packages:');
-    console.log(`> ${npmPublishCommand}`);
-    console.log(
-      `Note: You will need to authenticate with your NPM credentials`
-    );
-    childProcess.execSync(npmPublishCommand, {
-      stdio: [0, 1, 2]
-    });
-    process.exit(0);
-  })
-  .catch(err => {
-    console.error(err.message);
-    process.exit(1);
+if (parsedArgs.local) {
+  pkgFiles.forEach((p) => {
+    const content = JSON.parse(fs.readFileSync(p).toString());
+    content.version = parsedVersion.version;
+    fs.writeFileSync(p, JSON.stringify(content, null, 2));
   });
+  childProcess.execSync(
+    `./scripts/publish.sh ${parsedVersion.version} latest --local`,
+    {
+      stdio: [0, 1, 2],
+    }
+  );
+  process.exit(0);
+} else {
+  releaseIt(options)
+    .then((output) => {
+      if (DRY_RUN) {
+        console.warn(
+          'WARNING: In DRY_RUN mode - not running publishing script'
+        );
+        process.exit(0);
+        return;
+      }
+      const npmTag = parsedVersion.isPrerelease ? 'next' : 'latest';
+      const npmPublishCommand = `./scripts/publish.sh ${output.version} ${npmTag}`;
+      console.log('Executing publishing script for all packages:');
+      console.log(`> ${npmPublishCommand}`);
+      console.log(
+        `Note: You will need to authenticate with your NPM credentials`
+      );
+      childProcess.execSync(npmPublishCommand, {
+        stdio: [0, 1, 2],
+      });
+      process.exit(0);
+    })
+    .catch((err) => {
+      console.error(err.message);
+      process.exit(1);
+    });
+}

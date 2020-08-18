@@ -3,7 +3,7 @@ import { ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/router';
 import { Actions, ofType } from '@ngrx/effects';
 import { ROUTER_NAVIGATION, RouterNavigationAction } from '@ngrx/router-store';
 import { Action, Store, ActionCreator } from '@ngrx/store';
-import { Observable, of } from 'rxjs';
+import { isObservable, Observable, of } from 'rxjs';
 import {
   catchError,
   concatMap,
@@ -12,7 +12,7 @@ import {
   map,
   mergeMap,
   switchMap,
-  withLatestFrom
+  withLatestFrom,
 } from 'rxjs/operators';
 
 /**
@@ -83,7 +83,7 @@ export function fetch<T, A extends Action>(opts: FetchOpts<T, A>) {
       );
 
       return groupedFetches.pipe(
-        mergeMap(pairs =>
+        mergeMap((pairs) =>
           pairs.pipe(switchMap(runWithErrorHandling(opts.run, opts.onError)))
         )
       );
@@ -113,7 +113,7 @@ export function navigation<T, A extends Action>(
 
         return [
           findSnapshot(component, action.payload.routerState.root),
-          state
+          state,
         ] as [ActivatedRouteSnapshot, T];
       }),
       filter(([snapshot, state]) => !!snapshot)
@@ -136,7 +136,7 @@ function runWithErrorHandling<T, A, R>(
   return ([action, state]: [A, T]): Observable<R> => {
     try {
       const r = wrapIntoObservable(run(action, state));
-      return r.pipe(catchError(e => wrapIntoObservable(onError(action, e))));
+      return r.pipe(catchError((e) => wrapIntoObservable(onError(action, e))));
     } catch (e) {
       return wrapIntoObservable(onError(action, e));
     }
@@ -150,7 +150,7 @@ function runWithErrorHandling<T, A, R>(
 function mapActionAndState<T, A>() {
   return (source: Observable<ActionOrActionWithState<T, A>>) => {
     return source.pipe(
-      map(value => {
+      map((value) => {
         const [action, store] = normalizeActionAndState(value);
         return [action, store] as [A, T];
       })
@@ -436,7 +436,7 @@ function findSnapshot(
 }
 
 function wrapIntoObservable<O>(obj: Observable<O> | O | void): Observable<O> {
-  if (!!obj && obj instanceof Observable) {
+  if (isObservable(obj)) {
     return obj;
   } else if (!obj) {
     return of();

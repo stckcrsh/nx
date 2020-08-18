@@ -61,9 +61,22 @@
           {
             "value": "@emotion/styled",
             "label": "emotion           [ https://emotion.sh            ]"
+          },
+          {
+            "value": "styled-jsx",
+            "label": "styled-jsx        [ https://www.npmjs.com/package/styled-jsx ]"
+          },
+          {
+            "value": "none",
+            "label": "None"
           }
         ]
       }
+    },
+    "js": {
+      "type": "boolean",
+      "description": "Generate JavaScript files rather than TypeScript files.",
+      "default": false
     },
     "skipTests": {
       "type": "boolean",
@@ -74,6 +87,11 @@
       "type": "string",
       "description": "Create the component under this directory (can be nested).",
       "alias": "d"
+    },
+    "flat": {
+      "type": "boolean",
+      "description": "Create component at the source root rather than its own directory.",
+      "default": false
     },
     "export": {
       "type": "boolean",
@@ -97,16 +115,6 @@
     "routing": {
       "type": "boolean",
       "description": "Generate a library with routes."
-    },
-    "js": {
-      "type": "boolean",
-      "description": "Generate JavaScript files rather than TypeScript files.",
-      "default": false
-    },
-    "flat": {
-      "type": "boolean",
-      "description": "Create component at the source root rather than its own directory.",
-      "default": false
     }
   },
   "required": ["name", "project"]

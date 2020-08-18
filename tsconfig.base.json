@@ -1,0 +1,34 @@
+{
+  "compilerOptions": {
+    "target": "es2015",
+    "sourceMap": true,
+    "importHelpers": true,
+    "module": "esnext",
+    "moduleResolution": "node",
+    "outDir": "build",
+    "typeRoots": ["node_modules/@types"],
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "skipLibCheck": true,
+    "types": ["node", "jest"],
+    "lib": ["es2018"],
+    "declaration": true,
+    "baseUrl": ".",
+    "rootDir": ".",
+    "paths": {
+      "@nrwl/tao": ["./packages/tao"],
+      "@nrwl/tao/*": ["./packages/tao/*"],
+      "@nrwl/workspace": ["./packages/workspace"],
+      "@nrwl/workspace/*": ["./packages/workspace/*"],
+      "@nrwl/workspace/testing": ["./packages/workspace/testing"],
+      "@nrwl/react": ["./packages/react"],
+      "@nrwl/react/*": ["./packages/react/*"],
+      "@nrwl/web": ["./packages/web"],
+      "@nrwl/web/*": ["./packages/web/*"],
+      "@nrwl/angular": ["./packages/angular"],
+      "@nrwl/angular/*": ["./packages/angular/*"],
+      "@nrwl/e2e/utils": ["./e2e/utils"],
+      "@nrwl/e2e/cli": ["./e2e/cli"]
+    }
+  }
+}

@@ -21,11 +21,12 @@
         "$source": "argv",
         "index": 0
       },
-      "x-prompt": "What name would you like to use for the library?"
+      "x-prompt": "What name would you like to use for the library?",
+      "pattern": "^[a-zA-Z]{1}.*$"
     },
     "directory": {
       "type": "string",
-      "description": "A directory where the app is placed",
+      "description": "A directory where the lib is placed.",
       "alias": "d"
     },
     "style": {
@@ -57,6 +58,14 @@
           {
             "value": "@emotion/styled",
             "label": "emotion           [ https://emotion.sh            ]"
+          },
+          {
+            "value": "styled-jsx",
+            "label": "styled-jsx        [ https://www.npmjs.com/package/styled-jsx ]"
+          },
+          {
+            "value": "none",
+            "label": "None"
           }
         ]
       }
@@ -65,21 +74,21 @@
       "description": "The tool to use for running lint checks.",
       "type": "string",
       "enum": ["eslint", "tslint"],
-      "default": "tslint"
+      "default": "eslint"
     },
     "unitTestRunner": {
       "type": "string",
       "enum": ["jest", "none"],
-      "description": "Test runner to use for unit tests",
+      "description": "Test runner to use for unit tests.",
       "default": "jest"
     },
     "tags": {
       "type": "string",
-      "description": "Add tags to the library (used for linting)",
+      "description": "Add tags to the library (used for linting).",
       "alias": "t"
     },
     "skipFormat": {
-      "description": "Skip formatting files",
+      "description": "Skip formatting files.",
       "type": "boolean",
       "default": false
     },
@@ -90,26 +99,40 @@
     },
     "pascalCaseFiles": {
       "type": "boolean",
-      "description": "Use pascal case component file name (e.g. App.tsx)",
+      "description": "Use pascal case component file name (e.g. App.tsx).",
       "alias": "P",
       "default": false
     },
     "routing": {
       "type": "boolean",
-      "description": "Generate library with routes"
+      "description": "Generate library with routes."
     },
     "appProject": {
       "type": "string",
-      "description": "The application project to add the library route to",
+      "description": "The application project to add the library route to.",
       "alias": "a"
     },
     "publishable": {
       "type": "boolean",
-      "description": "Create a publishable library. A \"build\" architect will be added for this project the workspace configuration."
+      "description": "Create a publishable library."
+    },
+    "buildable": {
+      "type": "boolean",
+      "default": false,
+      "description": "Generate a buildable library."
+    },
+    "importPath": {
+      "type": "string",
+      "description": "The library name used to import it, like @myorg/my-awesome-lib"
+    },
+    "component": {
+      "type": "boolean",
+      "description": "Generate a default component.",
+      "default": true
     },
     "js": {
       "type": "boolean",
-      "description": "Generate JavaScript files rather than TypeScript files",
+      "description": "Generate JavaScript files rather than TypeScript files.",
       "default": false
     }
   },

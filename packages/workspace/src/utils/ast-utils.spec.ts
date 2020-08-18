@@ -1,15 +1,17 @@
 import {
   readJsonInTree,
   renameSyncInTree,
-  renameDirSyncInTree
+  renameDirSyncInTree,
+  addDepsToPackageJson,
 } from './ast-utils';
 import {
   SchematicTestRunner,
-  UnitTestTree
+  UnitTestTree,
 } from '@angular-devkit/schematics/testing';
 import { join } from 'path';
-import { Tree } from '@angular-devkit/schematics';
+import { Tree, SchematicContext, TaskId } from '@angular-devkit/schematics';
 import { serializeJson } from './fileutils';
+import { createEmptyWorkspace } from './testing-utils';
 
 describe('readJsonInTree', () => {
   let tree: Tree;
@@ -21,11 +23,11 @@ describe('readJsonInTree', () => {
     tree.create(
       'data.json',
       serializeJson({
-        data: 'data'
+        data: 'data',
       })
     );
     expect(readJsonInTree(tree, 'data.json')).toEqual({
-      data: 'data'
+      data: 'data',
     });
   });
 
@@ -63,7 +65,7 @@ describe('renameSyncInTree', () => {
   it('should rename a file in the tree', () => {
     const content = 'my content';
     tree.create('/a', content);
-    renameSyncInTree(tree, '/a', '/b', err => {
+    renameSyncInTree(tree, '/a', '/b', (err) => {
       expect(err).toBeFalsy();
       expect(content).toEqual(tree.readContent('/b'));
     });
@@ -72,7 +74,7 @@ describe('renameSyncInTree', () => {
   it('should rename a file in the tree to a nested dir', () => {
     const content = 'my content';
     tree.create('/a', content);
-    renameSyncInTree(tree, '/a', '/x/y/z/b', err => {
+    renameSyncInTree(tree, '/a', '/x/y/z/b', (err) => {
       expect(err).toBeFalsy();
       expect(content).toEqual(tree.readContent('/x/y/z/b'));
     });
@@ -90,7 +92,7 @@ describe('renameDirSyncInTree', () => {
     const content = 'my content';
     tree.create('/dir/a', content);
     tree.create('/dir/b', content);
-    renameDirSyncInTree(tree, 'dir', '/newdir', err => {
+    renameDirSyncInTree(tree, 'dir', '/newdir', (err) => {
       expect(err).toBeFalsy();
       expect(tree.files).toContain('/newdir/a');
       expect(tree.files).toContain('/newdir/b');
@@ -107,7 +109,7 @@ describe('renameDirSyncInTree', () => {
     tree.create('/dir/sub1/d', content);
     tree.create('/dir/sub1/sub2/e', content);
     tree.create('/dir/sub1/sub2/f', content);
-    renameDirSyncInTree(tree, 'dir', '/newdir', err => {
+    renameDirSyncInTree(tree, 'dir', '/newdir', (err) => {
       expect(err).toBeFalsy();
       expect(tree.files).toContain('/newdir/a');
       expect(tree.files).toContain('/newdir/b');
@@ -122,5 +124,71 @@ describe('renameDirSyncInTree', () => {
       expect(tree.files).not.toContain('/dir/sub1/sub2/e');
       expect(tree.files).not.toContain('/dir/sub1/sub2/f');
     });
+  });
+});
+
+describe('addDepsToPackageJson', () => {
+  let appTree: Tree;
+
+  beforeEach(() => {
+    appTree = Tree.empty();
+    appTree = createEmptyWorkspace(appTree);
+  });
+
+  it('should not update the package.json if dependencies have already been added', async () => {
+    const devDeps = {
+      '@nrwl/jest': '1.2.3',
+    };
+
+    appTree.overwrite(
+      '/package.json',
+      JSON.stringify({
+        dependencies: {},
+        devDependencies: {
+          ...devDeps,
+        },
+      })
+    );
+
+    const testRunner = new SchematicTestRunner('@nrwl/jest', null);
+
+    await testRunner
+      .callRule(() => {
+        return addDepsToPackageJson({}, devDeps);
+      }, appTree)
+      .toPromise();
+
+    expect(
+      testRunner.tasks.find((x) => x.name === 'node-package')
+    ).not.toBeDefined();
+  });
+
+  it('should update the package.json if some of the dependencies are missing', async () => {
+    const devDeps = {
+      '@nrwl/jest': '1.2.3',
+      '@nrwl/workspace': '1.1.1',
+    };
+
+    appTree.overwrite(
+      '/package.json',
+      JSON.stringify({
+        dependencies: {},
+        devDependencies: {
+          '@nrwl/jest': '1.2.3',
+        },
+      })
+    );
+
+    const testRunner = new SchematicTestRunner('@nrwl/jest', null);
+
+    await testRunner
+      .callRule(() => {
+        return addDepsToPackageJson({}, devDeps);
+      }, appTree)
+      .toPromise();
+
+    expect(
+      testRunner.tasks.find((x) => x.name === 'node-package')
+    ).toBeDefined();
   });
 });

@@ -10,7 +10,7 @@ Builder properties can be configured in angular.json when defining the builder, 
 
 Alias(es): b
 
-Type: `number`
+Type: `number | boolean`
 
 Exit the test suite immediately after `n` number of failing tests. (https://jestjs.io/docs/en/cli#bail)
 
@@ -27,6 +27,8 @@ Type: `boolean`
 Deletes the Jest cache directory and then exits without running tests. Will delete Jest's default cache directory. _Note: clearing the cache will reduce performance_.
 
 ### codeCoverage
+
+Alias(es): coverage
 
 Type: `boolean`
 
@@ -52,23 +54,23 @@ Type: `string`
 
 The path to a Jest config file specifying how to find and execute tests. If no rootDir is set in the config, the directory containing the config file is assumed to be the rootDir for the project. This can also be a JSON-encoded value which Jest will use as configuration
 
-### coverage
-
-Type: `boolean`
-
-Indicates that test coverage information should be collected and reported in the output. This option is also aliased by --collectCoverage. (https://jestjs.io/docs/en/cli#coverage)
-
 ### coverageDirectory
 
 Type: `string`
 
-An array of regexp pattern strings that are matched against all file paths before executing the test. If the file path matches any of the patterns, coverage information will be skipped.
+The directory where Jest should output its coverage files.
 
 ### coverageReporters
 
 Type: `string`
 
 A list of reporter names that Jest uses when writing coverage reports. Any istanbul reporter
+
+### detectOpenHandles
+
+Type: `boolean`
+
+Attempt to collect and print open handles preventing Jest from exiting cleanly (https://jestjs.io/docs/en/cli.html#--detectopenhandles)
 
 ### findRelatedTests
 
@@ -92,7 +94,7 @@ Prints the test results in JSON. This mode will send all other test output and u
 
 Alias(es): w
 
-Type: `number`
+Type: `number | string`
 
 Specifies the maximum number of workers the worker-pool will spawn for running tests. This defaults to the number of the cores available on your machine. Useful for CI. (its usually best not to override this default) (https://jestjs.io/docs/en/cli#maxworkers-num)
 
@@ -134,7 +136,13 @@ Run all tests serially in the current process (rather than creating a worker poo
 
 Type: `string`
 
-The name of a setup file used by Jest. (https://jestjs.io/docs/en/configuration#setupfilesafterenv-array)
+[Deprecated] The name of a setup file used by Jest. (use Jest config file https://jestjs.io/docs/en/configuration#setupfilesafterenv-array)
+
+### showConfig
+
+Type: `boolean`
+
+Print your Jest config and then exits. (https://jestjs.io/docs/en/cli#--showconfig)
 
 ### silent
 
@@ -178,7 +186,7 @@ Node module that implements a custom results processor. (https://jestjs.io/docs/
 
 Type: `string`
 
-The name of the Typescript configuration file.
+[Deprecated] The name of the Typescript configuration file. Set the tsconfig option in the jest config file.
 
 ### updateSnapshot
 

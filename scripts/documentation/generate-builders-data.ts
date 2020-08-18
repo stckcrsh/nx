@@ -6,16 +6,16 @@ import { Schematic } from '@angular-devkit/schematics/collection-schema';
 import { CoreSchemaRegistry } from '@angular-devkit/core/src/json/schema';
 import {
   htmlSelectorFormat,
-  pathFormat
+  pathFormat,
 } from '@angular-devkit/schematics/src/formats';
 import {
   generateJsonFile,
   generateMarkdownFile,
-  sortAlphabeticallyFunction
+  sortAlphabeticallyFunction,
 } from './utils';
 import {
   Configuration,
-  getPackageConfigurations
+  getPackageConfigurations,
 } from './get-package-configurations';
 
 /**
@@ -36,17 +36,25 @@ function generateSchematicList(
   const builderCollectionFile = path.join(config.root, 'builders.json');
   fs.removeSync(config.builderOutput);
   const builderCollection = fs.readJsonSync(builderCollectionFile).builders;
-  return Object.keys(builderCollection).map(builderName => {
-    const builder = {
+  return Object.keys(builderCollection).map((builderName) => {
+    const schemaPath = path.join(
+      config.root,
+      builderCollection[builderName]['schema']
+    );
+    let builder = {
       name: builderName,
       ...builderCollection[builderName],
-      rawSchema: fs.readJsonSync(
-        path.join(config.root, builderCollection[builderName]['schema'])
-      )
+      rawSchema: fs.readJsonSync(schemaPath),
     };
+    if (builder.rawSchema.examplesFile) {
+      builder.examplesFileFullPath = path.join(
+        schemaPath.replace('schema.json', ''),
+        builder.rawSchema.examplesFile
+      );
+    }
     return parseJsonSchemaToOptions(registry, builder.rawSchema)
-      .then(options => ({ ...builder, options }))
-      .catch(error =>
+      .then((options) => ({ ...builder, options }))
+      .catch((error) =>
         console.error(`Can't parse schema option of ${builder.name}:\n${error}`)
       );
   });
@@ -57,6 +65,7 @@ function generateTemplate(
   builder
 ): { name: string; template: string } {
   const filename = framework === 'angular' ? 'angular.json' : 'workspace.json';
+  const cliCommand = 'nx';
 
   let template = dedent`
     # ${builder.name}
@@ -70,14 +79,25 @@ function generateTemplate(
     }
     \n`;
 
+  if (builder.examplesFileFullPath) {
+    template += `## Examples\n`;
+    let examples = fs
+      .readFileSync(builder.examplesFileFullPath)
+      .toString()
+      .replace(/<%= cli %>/gm, cliCommand);
+    template += dedent`${examples}`;
+  }
+
   if (Array.isArray(builder.options) && !!builder.options.length) {
     template += '## Properties';
 
     builder.options
       .sort((a, b) => sortAlphabeticallyFunction(a.name, b.name))
-      .forEach(option => {
+      .forEach((option) => {
         const enumStr = option.enum
-          ? `Possible values: ${option.enum.map(e => `\`${e}\``).join(', ')}\n`
+          ? `Possible values: ${option.enum
+              .map((e) => `\`${e}\``)
+              .join(', ')}\n`
           : ``;
         template += dedent`
             ### ${option.name} ${option.required ? '(*__required__*)' : ''} ${
@@ -93,17 +113,30 @@ function generateTemplate(
               option.default === undefined || option.default === ''
                 ? ''
                 : `Default: \`${option.default}\`\n`
-            }
-            Type: \`${option.type}\` ${
-          option.arrayOfType ? `of \`${option.arrayOfType}\`` : ''
-        } \n 
-            
+            }`;
+
+        if (option.types && option.types.length) {
+          const displayTypeList = option.types.map((type) =>
+            type === 'array' ? `${option.type}[]` : type
+          );
+          template += dedent`
+              Type: \`${displayTypeList.join(' | ')} \`\n`;
+        } else {
+          template += dedent`
+              Type: ${
+                option.arrayOfType
+                  ? `\`${option.arrayOfType}[]\``
+                  : `\`${option.type}\``
+              } \n`;
+        }
+
+        template += dedent`  
             ${enumStr} 
             ${option.description}
           `;
 
         if (option.arrayOfType && option.arrayOfValues) {
-          option.arrayOfValues.forEach(optionValue => {
+          option.arrayOfValues.forEach((optionValue) => {
             template += dedent`
               #### ${optionValue.name} ${
               optionValue.required ? '(*__required__*)' : ''
@@ -123,15 +156,15 @@ Promise.all(
   getPackageConfigurations().map(({ framework, configs }) => {
     return Promise.all(
       configs
-        .filter(item => item.hasBuilders)
-        .map(config => {
+        .filter((item) => item.hasBuilders)
+        .map((config) => {
           Promise.all(generateSchematicList(config, registry))
-            .then(builderList =>
-              builderList.map(b => generateTemplate(framework, b))
+            .then((builderList) =>
+              builderList.map((b) => generateTemplate(framework, b))
             )
-            .then(markdownList =>
+            .then((markdownList) =>
               Promise.all(
-                markdownList.map(template =>
+                markdownList.map((template) =>
                   generateMarkdownFile(config.builderOutput, template)
                 )
               )
@@ -150,8 +183,8 @@ Promise.all(
 
 getPackageConfigurations().forEach(async ({ framework, configs }) => {
   const builders = configs
-    .filter(item => item.hasBuilders)
-    .map(item => item.name);
+    .filter((item) => item.hasBuilders)
+    .map((item) => item.name);
   await generateJsonFile(
     path.join(__dirname, '../../docs', framework, 'builders.json'),
     builders

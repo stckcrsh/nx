@@ -1,7 +1,8 @@
 import { Tree } from '@angular-devkit/schematics';
 import { createEmptyWorkspace } from '@nrwl/workspace/testing';
-import { readJsonInTree } from '@nrwl/workspace';
+import { readJsonInTree, updateJsonInTree } from '@nrwl/workspace';
 import { NxJson } from '@nrwl/workspace';
+
 import { runSchematic } from '../../utils/testing';
 
 describe('lib', () => {
@@ -20,14 +21,15 @@ describe('lib', () => {
       expect(workspaceJson.projects['my-lib'].root).toEqual('libs/my-lib');
       expect(workspaceJson.projects['my-lib'].architect.build).toBeUndefined();
       expect(workspaceJson.projects['my-lib'].architect.lint).toEqual({
-        builder: '@angular-devkit/build-angular:tslint',
+        builder: '@nrwl/linter:lint',
         options: {
-          exclude: ['**/node_modules/**', '!libs/my-lib/**'],
+          linter: 'eslint',
+          exclude: ['**/node_modules/**', '!libs/my-lib/**/*'],
           tsConfig: [
             'libs/my-lib/tsconfig.lib.json',
-            'libs/my-lib/tsconfig.spec.json'
-          ]
-        }
+            'libs/my-lib/tsconfig.spec.json',
+          ],
+        },
       });
     });
 
@@ -38,34 +40,48 @@ describe('lib', () => {
         appTree
       );
       const nxJson = readJsonInTree<NxJson>(tree, '/nx.json');
-      expect(nxJson).toEqual({
-        npmScope: 'proj',
-        projects: {
-          'my-lib': {
-            tags: ['one', 'two']
-          }
-        }
+      expect(nxJson.projects).toEqual({
+        'my-lib': {
+          tags: ['one', 'two'],
+        },
       });
     });
 
     it('should update root tsconfig.json', async () => {
       const tree = await runSchematic('lib', { name: 'myLib' }, appTree);
-      const tsconfigJson = readJsonInTree(tree, '/tsconfig.json');
+      const tsconfigJson = readJsonInTree(tree, '/tsconfig.base.json');
       expect(tsconfigJson.compilerOptions.paths['@proj/my-lib']).toEqual([
-        'libs/my-lib/src/index.ts'
+        'libs/my-lib/src/index.ts',
+      ]);
+    });
+
+    it('should update root tsconfig.json (no existing path mappings)', async () => {
+      const updatedTree: any = updateJsonInTree(
+        'tsconfig.base.json',
+        (json) => {
+          json.compilerOptions.paths = undefined;
+          return json;
+        }
+      )(appTree, null);
+
+      const tree = await runSchematic('lib', { name: 'myLib' }, updatedTree);
+      const tsconfigJson = readJsonInTree(tree, '/tsconfig.base.json');
+      expect(tsconfigJson.compilerOptions.paths['@proj/my-lib']).toEqual([
+        'libs/my-lib/src/index.ts',
       ]);
     });
 
     it('should create a local tsconfig.json', async () => {
       const tree = await runSchematic('lib', { name: 'myLib' }, appTree);
       const tsconfigJson = readJsonInTree(tree, 'libs/my-lib/tsconfig.json');
-      expect(tsconfigJson).toEqual({
-        extends: '../../tsconfig.json',
-        compilerOptions: {
-          types: ['node', 'jest']
+      expect(tsconfigJson.references).toEqual([
+        {
+          path: './tsconfig.lib.json',
         },
-        include: ['**/*.ts']
-      });
+        {
+          path: './tsconfig.spec.json',
+        },
+      ]);
     });
 
     it('should extend the local tsconfig.json with tsconfig.spec.json', async () => {
@@ -88,9 +104,14 @@ describe('lib', () => {
 
     it('should generate files', async () => {
       const tree = await runSchematic('lib', { name: 'myLib' }, appTree);
+
       expect(tree.exists(`libs/my-lib/jest.config.js`)).toBeTruthy();
       expect(tree.exists('libs/my-lib/src/index.ts')).toBeTruthy();
       expect(tree.exists('libs/my-lib/src/lib/my-lib.ts')).toBeTruthy();
+      expect(tree.exists('libs/my-lib/README.md')).toBeTruthy();
+
+      const ReadmeContent = tree.readContent('libs/my-lib/README.md');
+      expect(ReadmeContent).toContain('nx test my-lib');
     });
   });
 
@@ -101,18 +122,15 @@ describe('lib', () => {
         {
           name: 'myLib',
           directory: 'myDir',
-          tags: 'one'
+          tags: 'one',
         },
         appTree
       );
       const nxJson = readJsonInTree<NxJson>(tree, '/nx.json');
-      expect(nxJson).toEqual({
-        npmScope: 'proj',
-        projects: {
-          'my-dir-my-lib': {
-            tags: ['one']
-          }
-        }
+      expect(nxJson.projects).toEqual({
+        'my-dir-my-lib': {
+          tags: ['one'],
+        },
       });
 
       const tree2 = await runSchematic(
@@ -121,21 +139,18 @@ describe('lib', () => {
           name: 'myLib2',
           directory: 'myDir',
           tags: 'one,two',
-          simpleModuleName: true
+          simpleModuleName: true,
         },
         tree
       );
       const nxJson2 = readJsonInTree<NxJson>(tree2, '/nx.json');
-      expect(nxJson2).toEqual({
-        npmScope: 'proj',
-        projects: {
-          'my-dir-my-lib': {
-            tags: ['one']
-          },
-          'my-dir-my-lib2': {
-            tags: ['one', 'two']
-          }
-        }
+      expect(nxJson2.projects).toEqual({
+        'my-dir-my-lib': {
+          tags: ['one'],
+        },
+        'my-dir-my-lib2': {
+          tags: ['one', 'two'],
+        },
       });
     });
 
@@ -151,7 +166,7 @@ describe('lib', () => {
         tree.exists('libs/my-dir/my-lib/src/lib/my-dir-my-lib.ts')
       ).toBeTruthy();
       expect(tree.exists('libs/my-dir/my-lib/src/index.ts')).toBeTruthy();
-      expect(tree.exists(`libs/my-dir/my-lib/tslint.json`)).toBeTruthy();
+      expect(tree.exists(`libs/my-dir/my-lib/.eslintrc`)).toBeTruthy();
     });
 
     it('should update workspace.json', async () => {
@@ -166,14 +181,15 @@ describe('lib', () => {
         'libs/my-dir/my-lib'
       );
       expect(workspaceJson.projects['my-dir-my-lib'].architect.lint).toEqual({
-        builder: '@angular-devkit/build-angular:tslint',
+        builder: '@nrwl/linter:lint',
         options: {
-          exclude: ['**/node_modules/**', '!libs/my-dir/my-lib/**'],
+          linter: 'eslint',
+          exclude: ['**/node_modules/**', '!libs/my-dir/my-lib/**/*'],
           tsConfig: [
             'libs/my-dir/my-lib/tsconfig.lib.json',
-            'libs/my-dir/my-lib/tsconfig.spec.json'
-          ]
-        }
+            'libs/my-dir/my-lib/tsconfig.spec.json',
+          ],
+        },
       });
     });
 
@@ -183,10 +199,10 @@ describe('lib', () => {
         { name: 'myLib', directory: 'myDir' },
         appTree
       );
-      const tsconfigJson = readJsonInTree(tree, '/tsconfig.json');
-      expect(tsconfigJson.compilerOptions.paths['@proj/my-dir/my-lib']).toEqual(
-        ['libs/my-dir/my-lib/src/index.ts']
-      );
+      const tsconfigJson = readJsonInTree(tree, '/tsconfig.base.json');
+      expect(
+        tsconfigJson.compilerOptions.paths['@proj/my-dir/my-lib']
+      ).toEqual(['libs/my-dir/my-lib/src/index.ts']);
       expect(
         tsconfigJson.compilerOptions.paths['my-dir-my-lib/*']
       ).toBeUndefined();
@@ -203,27 +219,25 @@ describe('lib', () => {
         tree,
         'libs/my-dir/my-lib/tsconfig.json'
       );
-      expect(tsconfigJson).toEqual({
-        extends: '../../../tsconfig.json',
-        compilerOptions: {
-          types: ['node', 'jest']
+      expect(tsconfigJson.references).toEqual([
+        {
+          path: './tsconfig.lib.json',
         },
-        include: ['**/*.ts']
-      });
+        {
+          path: './tsconfig.spec.json',
+        },
+      ]);
     });
 
-    it('should create a local tslint.json', async () => {
+    it('should create a local .eslintrc', async () => {
       const tree = await runSchematic(
         'lib',
         { name: 'myLib', directory: 'myDir' },
         appTree
       );
 
-      const tslintJson = readJsonInTree(tree, 'libs/my-dir/my-lib/tslint.json');
-      expect(tslintJson).toEqual({
-        extends: '../../../tslint.json',
-        rules: {}
-      });
+      const lint = readJsonInTree(tree, 'libs/my-dir/my-lib/.eslintrc');
+      expect(lint.extends).toEqual('../../../.eslintrc');
     });
   });
 
@@ -241,6 +255,51 @@ describe('lib', () => {
       expect(
         workspaceJson.projects['my-lib'].architect.lint.options.tsConfig
       ).toEqual(['libs/my-lib/tsconfig.lib.json']);
+    });
+  });
+
+  describe('--importPath', () => {
+    it('should update the tsconfig with the given import path', async () => {
+      const tree = await runSchematic(
+        'lib',
+        {
+          name: 'myLib',
+          directory: 'myDir',
+          importPath: '@myorg/lib',
+        },
+        appTree
+      );
+      const tsconfigJson = readJsonInTree(tree, '/tsconfig.base.json');
+
+      expect(tsconfigJson.compilerOptions.paths['@myorg/lib']).toBeDefined();
+    });
+
+    it('should fail if the same importPath has already been used', async () => {
+      const tree1 = await runSchematic(
+        'lib',
+        {
+          name: 'myLib1',
+          importPath: '@myorg/lib',
+        },
+        appTree
+      );
+
+      try {
+        await runSchematic(
+          'lib',
+          {
+            name: 'myLib2',
+            importPath: '@myorg/lib',
+          },
+          tree1
+        );
+      } catch (e) {
+        expect(e.message).toContain(
+          'You already have a library using the import path'
+        );
+      }
+
+      expect.assertions(1);
     });
   });
 });

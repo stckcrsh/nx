@@ -1,52 +1,67 @@
 import { AffectedEventType, Task, TasksRunner } from './tasks-runner';
-import { defaultTasksRunner } from './default-tasks-runner';
-import { isRelativePath } from '../utils/fileutils';
 import { join } from 'path';
 import { appRootPath } from '../utils/app-root';
-import { DefaultReporter, ReporterArgs } from './default-reporter';
+import { ReporterArgs } from './default-reporter';
 import * as yargs from 'yargs';
 import { ProjectGraph, ProjectGraphNode } from '../core/project-graph';
 import { Environment, NxJson } from '../core/shared-interfaces';
 import { NxArgs } from '@nrwl/workspace/src/command-line/utils';
+import { isRelativePath } from '../utils/fileutils';
+import { Hasher } from '../core/hasher/hasher';
+import { projectHasTargetAndConfiguration } from '../utils/project-graph-utils';
 
 type RunArgs = yargs.Arguments & ReporterArgs;
 
-export function runCommand<T extends RunArgs>(
+export async function runCommand<T extends RunArgs>(
   projectsToRun: ProjectGraphNode[],
   projectGraph: ProjectGraph,
-  { nxJson, workspace }: Environment,
+  { nxJson, workspaceResults }: Environment,
   nxArgs: NxArgs,
-  overrides: any
+  overrides: any,
+  reporter: any,
+  initiatingProject: string | null
 ) {
-  const reporter = new DefaultReporter();
-  reporter.beforeRun(projectsToRun.map(p => p.name), nxArgs, overrides);
-  const tasks: Task[] = projectsToRun.map(project =>
-    createTask({
+  reporter.beforeRun(
+    projectsToRun.map((p) => p.name),
+    nxArgs,
+    overrides
+  );
+
+  const { tasksRunner, tasksOptions } = getRunner(nxArgs, nxJson, {
+    ...nxArgs,
+    ...overrides,
+  });
+
+  const tasks: Task[] = projectsToRun.map((project) => {
+    return createTask({
       project,
       target: nxArgs.target,
       configuration: nxArgs.configuration,
-      overrides: overrides
-    })
-  );
-
-  const { tasksRunner, tasksOptions } = getRunner(nxArgs.runner, nxJson, {
-    ...nxArgs,
-    ...overrides
+      overrides: overrides,
+    });
   });
+
+  const hasher = new Hasher(projectGraph, nxJson, tasksOptions);
+  const res = await hasher.hashTasks(tasks);
+  for (let i = 0; i < res.length; ++i) {
+    tasks[i].hash = res[i].value;
+    tasks[i].hashDetails = res[i].details;
+  }
   const cached = [];
   tasksRunner(tasks, tasksOptions, {
+    initiatingProject: initiatingProject,
     target: nxArgs.target,
     projectGraph,
-    nxJson
+    nxJson,
   }).subscribe({
     next: (event: any) => {
       switch (event.type) {
         case AffectedEventType.TaskComplete: {
-          workspace.setResult(event.task.target.project, event.success);
+          workspaceResults.setResult(event.task.target.project, event.success);
           break;
         }
         case AffectedEventType.TaskCacheRead: {
-          workspace.setResult(event.task.target.project, event.success);
+          workspaceResults.setResult(event.task.target.project, event.success);
           cached.push(event.task.target.project);
           break;
         }
@@ -57,18 +72,18 @@ export function runCommand<T extends RunArgs>(
       // fix for https://github.com/nrwl/nx/issues/1666
       if (process.stdin['unref']) (process.stdin as any).unref();
 
-      workspace.saveResults();
+      workspaceResults.saveResults();
       reporter.printResults(
         nxArgs,
-        workspace.failedProjects,
-        workspace.startedWithFailedProjects,
+        workspaceResults.failedProjects,
+        workspaceResults.startedWithFailedProjects,
         cached
       );
 
-      if (workspace.hasFailure) {
+      if (workspaceResults.hasFailure) {
         process.exit(1);
       }
-    }
+    },
   });
 }
 
@@ -83,24 +98,32 @@ export function createTask({
   project,
   target,
   configuration,
-  overrides
+  overrides,
 }: TaskParams): Task {
+  const config = projectHasTargetAndConfiguration(
+    project,
+    target,
+    configuration
+  )
+    ? configuration
+    : undefined;
   const qualifiedTarget = {
     project: project.name,
     target,
-    configuration
+    configuration: config,
   };
   return {
     id: getId(qualifiedTarget),
     target: qualifiedTarget,
-    overrides: interpolateOverrides(overrides, project.name, project.data)
+    projectRoot: project.data.root,
+    overrides: interpolateOverrides(overrides, project.name, project.data),
   };
 }
 
 function getId({
   project,
   target,
-  configuration
+  configuration,
 }: {
   project: string;
   target: string;
@@ -114,24 +137,27 @@ function getId({
 }
 
 export function getRunner(
-  runner: string | undefined,
+  nxArgs: NxArgs,
   nxJson: NxJson,
   overrides: any
 ): {
   tasksRunner: TasksRunner;
   tasksOptions: unknown;
 } {
+  let runner = nxArgs.runner;
   if (!nxJson.tasksRunnerOptions) {
+    const t = require('./default-tasks-runner');
     return {
-      tasksRunner: defaultTasksRunner,
-      tasksOptions: overrides
+      tasksRunner: t.defaultTasksRunner,
+      tasksOptions: overrides,
     };
   }
 
   if (!runner && !nxJson.tasksRunnerOptions.default) {
+    const t = require('./default-tasks-runner');
     return {
-      tasksRunner: defaultTasksRunner,
-      tasksOptions: overrides
+      tasksRunner: t.defaultTasksRunner,
+      tasksOptions: overrides,
     };
   }
 
@@ -139,22 +165,29 @@ export function getRunner(
 
   if (nxJson.tasksRunnerOptions[runner]) {
     let modulePath: string = nxJson.tasksRunnerOptions[runner].runner;
-    if (isRelativePath(modulePath)) {
-      modulePath = join(appRootPath, modulePath);
-    }
 
-    let tasksRunner = require(modulePath);
-    // to support both babel and ts formats
-    if (tasksRunner.default) {
-      tasksRunner = tasksRunner.default;
+    let tasksRunner;
+    if (modulePath) {
+      if (isRelativePath(modulePath)) {
+        modulePath = join(appRootPath, modulePath);
+      }
+
+      tasksRunner = require(modulePath);
+      // to support both babel and ts formats
+      if (tasksRunner.default) {
+        tasksRunner = tasksRunner.default;
+      }
+    } else {
+      tasksRunner = require('./default-tasks-runner').defaultTasksRunner;
     }
 
     return {
       tasksRunner,
       tasksOptions: {
         ...nxJson.tasksRunnerOptions[runner].options,
-        ...overrides
-      }
+        ...overrides,
+        skipNxCache: nxArgs.skipNxCache,
+      },
     };
   } else {
     throw new Error(`Could not find runner configuration for ${runner}`);

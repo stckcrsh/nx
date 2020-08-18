@@ -1,48 +1,60 @@
 import * as yargs from 'yargs';
 import { runCommand } from '../tasks-runner/run-command';
-import { splitArgsIntoNxArgsAndOverrides, NxArgs } from './utils';
-import { output } from '../utils/output';
+import { NxArgs, splitArgsIntoNxArgsAndOverrides } from './utils';
 import {
   createProjectGraph,
+  isWorkspaceProject,
+  onlyWorkspaceProjects,
   ProjectGraph,
   ProjectGraphNode,
-  withDeps
+  withDeps,
 } from '../core/project-graph';
 import { readEnvironment } from '../core/file-utils';
-import { projectHasTargetAndConfiguration } from '../utils/project-has-target-and-configuration';
+import { DefaultReporter } from '../tasks-runner/default-reporter';
+import { projectHasTarget } from '../utils/project-graph-utils';
+import { output } from '../utils/output';
 
 export function runMany(parsedArgs: yargs.Arguments): void {
-  const { nxArgs, overrides } = splitArgsIntoNxArgsAndOverrides(parsedArgs);
-  const env = readEnvironment(nxArgs.target);
+  const { nxArgs, overrides } = splitArgsIntoNxArgsAndOverrides(
+    parsedArgs,
+    'run-many'
+  );
   const projectGraph = createProjectGraph();
   const projects = projectsToRun(nxArgs, projectGraph);
-  runCommand(projects, projectGraph, env, nxArgs, overrides);
+  const projectMap: Record<string, ProjectGraphNode> = {};
+  projects.forEach((proj) => {
+    projectMap[proj.name] = proj;
+  });
+  const env = readEnvironment(nxArgs.target, projectMap);
+  const filteredProjects = Object.values(projects).filter(
+    (n) => !parsedArgs.onlyFailed || !env.workspaceResults.getResult(n.name)
+  );
+  runCommand(
+    filteredProjects,
+    projectGraph,
+    env,
+    nxArgs,
+    overrides,
+    new DefaultReporter(),
+    null
+  );
 }
 
 function projectsToRun(nxArgs: NxArgs, projectGraph: ProjectGraph) {
   const allProjects = Object.values(projectGraph.nodes);
   if (nxArgs.all) {
-    return runnableForTargetAndConfiguration(
-      allProjects,
-      nxArgs.target,
-      nxArgs.configuration
-    );
+    return runnableForTarget(allProjects, nxArgs.target);
   } else {
     checkForInvalidProjects(nxArgs, allProjects);
     let selectedProjects = allProjects.filter(
-      p => nxArgs.projects.indexOf(p.name) > -1
+      (p) => nxArgs.projects.indexOf(p.name) > -1
     );
     if (nxArgs.withDeps) {
       selectedProjects = Object.values(
         withDeps(projectGraph, selectedProjects).nodes
       );
     }
-    return runnableForTargetAndConfiguration(
-      selectedProjects,
-      nxArgs.target,
-      nxArgs.configuration,
-      true
-    );
+    return runnableForTarget(selectedProjects, nxArgs.target, true);
   }
 }
 
@@ -51,26 +63,25 @@ function checkForInvalidProjects(
   allProjects: ProjectGraphNode[]
 ) {
   const invalid = nxArgs.projects.filter(
-    name => !allProjects.find(p => p.name === name)
+    (name) => !allProjects.find((p) => p.name === name)
   );
   if (invalid.length !== 0) {
     throw new Error(`Invalid projects: ${invalid.join(', ')}`);
   }
 }
 
-function runnableForTargetAndConfiguration(
+function runnableForTarget(
   projects: ProjectGraphNode[],
   target: string,
-  configuration?: string,
   strict = false
 ): ProjectGraphNode[] {
-  const notRunnable = [];
-  const runnable = [];
+  const notRunnable = [] as ProjectGraphNode[];
+  const runnable = [] as ProjectGraphNode[];
 
   for (let project of projects) {
-    if (projectHasTargetAndConfiguration(project, target, configuration)) {
+    if (projectHasTarget(project, target)) {
       runnable.push(project);
-    } else {
+    } else if (isWorkspaceProject(project)) {
       notRunnable.push(project);
     }
   }
@@ -78,7 +89,7 @@ function runnableForTargetAndConfiguration(
   if (strict && notRunnable.length) {
     output.warn({
       title: `the following do not have configuration for "${target}"`,
-      bodyLines: notRunnable.map(p => '- ' + p)
+      bodyLines: notRunnable.map((p) => '- ' + p.name),
     });
   }
 

@@ -9,12 +9,10 @@ In this tutorial you:
 
 ## Learn More
 
-Watch the video showing how to use Nx and Angular Console to build full-stack applications.
+- [Free Nx Course on YouTube](https://www.youtube.com/watch?time_continue=49&v=2mYLe9Kp9VM&feature=emb_logo)
 
-<iframe width="560" height="380" src="https://www.youtube.com/embed/XZpp52IqD2A" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+**Dive Deep:**
 
-### Read Fundamentals
-
-- [Using Modern Tools](/angular/fundamentals/use-modern-tools)
-- [Building Full-Stack Applications](/angular/fundamentals/build-full-stack-applications)
-- [Developing Like Google: Monorepos and Automation](/angular/fundamentals/monorepos-automation)
+- [Nx CLI](/{{framework}}/cli/overview)
+- [Computation Caching](/{{framework}}/guides/computation-caching)
+- [Rebuilding What is Affected](/{{framework}}/guides/monorepo-affected)

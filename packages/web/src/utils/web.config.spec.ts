@@ -1,11 +1,12 @@
 import { getWebConfig as getWebPartial } from './web.config';
-jest.mock('tsconfig-paths-webpack-plugin');
 import TsConfigPathsPlugin from 'tsconfig-paths-webpack-plugin';
 import { createConsoleLogger } from '@angular-devkit/core/node';
 import { Logger } from '@angular-devkit/core/src/logger';
 import * as ts from 'typescript';
 import { WebBuildBuilderOptions } from '../builders/build/build.impl';
 import { join } from 'path';
+
+jest.mock('tsconfig-paths-webpack-plugin');
 
 describe('getWebConfig', () => {
   let input: WebBuildBuilderOptions;
@@ -15,6 +16,8 @@ describe('getWebConfig', () => {
   let mockCompilerOptions: any;
 
   beforeEach(() => {
+    root = join(__dirname, '../../../..');
+    sourceRoot = join(root, 'apps/app');
     input = {
       main: 'main.ts',
       index: 'index.html',
@@ -25,52 +28,40 @@ describe('getWebConfig', () => {
         scripts: true,
         styles: true,
         hidden: false,
-        vendors: false
+        vendors: false,
       },
       optimization: {
         scripts: false,
-        styles: false
+        styles: false,
       },
       styles: [],
       scripts: [],
       outputPath: 'dist',
       tsConfig: 'tsconfig.json',
-      fileReplacements: []
+      fileReplacements: [],
+      root,
+      sourceRoot,
     };
-    root = join(__dirname, '../../../..');
-    sourceRoot = join(root, 'apps/app');
     logger = createConsoleLogger();
 
     mockCompilerOptions = {
       target: 'es2015',
-      paths: { path: ['mapped/path'] }
+      paths: { path: ['mapped/path'] },
     };
-    (<any>TsConfigPathsPlugin).mockImplementation(
-      function MockPathsPlugin() {}
-    );
+    (<any>(
+      TsConfigPathsPlugin
+    )).mockImplementation(function MockPathsPlugin() {});
 
     spyOn(ts, 'readConfigFile').and.callFake(() => ({
       config: {
-        compilerOptions: mockCompilerOptions
-      }
+        compilerOptions: mockCompilerOptions,
+      },
     }));
   });
 
   it('should resolve the browser main field', () => {
     const result = getWebPartial(root, sourceRoot, input, logger, false, false);
     expect(result.resolve.mainFields).toContain('browser');
-  });
-
-  it('should use the style-loader to load styles', () => {
-    const result = getWebPartial(root, sourceRoot, input, logger, false, false);
-    expect(
-      result.module.rules.find(rule => rule.test.test('styles.css')).use[0]
-        .loader
-    ).toEqual('style-loader');
-    expect(
-      result.module.rules.find(rule => rule.test.test('styles.scss')).use[0]
-        .loader
-    ).toEqual('style-loader');
   });
 
   describe('without differential loading', () => {
@@ -81,7 +72,7 @@ describe('getWebConfig', () => {
           sourceRoot,
           {
             ...input,
-            polyfills: 'polyfills.ts'
+            polyfills: 'polyfills.ts',
           },
           logger,
           false,
@@ -98,7 +89,7 @@ describe('getWebConfig', () => {
           sourceRoot,
           {
             ...input,
-            es2015Polyfills: 'polyfills.es2015.ts'
+            es2015Polyfills: 'polyfills.es2015.ts',
           },
           logger,
           false,
@@ -117,7 +108,7 @@ describe('getWebConfig', () => {
           sourceRoot,
           {
             ...input,
-            polyfills: 'polyfills.ts'
+            polyfills: 'polyfills.ts',
           },
           logger,
           true,
@@ -129,7 +120,7 @@ describe('getWebConfig', () => {
           sourceRoot,
           {
             ...input,
-            polyfills: 'polyfills.ts'
+            polyfills: 'polyfills.ts',
           },
           logger,
           false,
@@ -147,7 +138,7 @@ describe('getWebConfig', () => {
           {
             ...input,
             polyfills: 'polyfills.ts',
-            es2015Polyfills: 'polyfills.es2015.ts'
+            es2015Polyfills: 'polyfills.es2015.ts',
           },
           logger,
           false,
@@ -164,7 +155,7 @@ describe('getWebConfig', () => {
           sourceRoot,
           {
             ...input,
-            polyfills: 'polyfills.ts'
+            polyfills: 'polyfills.ts',
           },
           logger,
           true,

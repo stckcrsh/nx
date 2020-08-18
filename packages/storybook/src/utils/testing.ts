@@ -10,12 +10,27 @@ import { TestingArchitectHost } from '@angular-devkit/architect/testing';
 
 import {
   createEmptyWorkspace,
-  MockBuilderContext
+  MockBuilderContext,
 } from '@nrwl/workspace/testing';
 
 const testRunner = new SchematicTestRunner(
   '@nrwl/storybook',
   join(__dirname, '../../collection.json')
+);
+
+testRunner.registerCollection(
+  '@nrwl/angular',
+  join(__dirname, '../../../angular/collection.json')
+);
+
+testRunner.registerCollection(
+  '@nrwl/jest',
+  join(__dirname, '../../../jest/collection.json')
+);
+
+testRunner.registerCollection(
+  '@nrwl/cypress',
+  join(__dirname, '../../../cypress/collection.json')
 );
 
 const migrationRunner = new SchematicTestRunner(
@@ -46,14 +61,14 @@ export async function createTestUILib(libName: string): Promise<Tree> {
   appTree = createEmptyWorkspace(appTree);
   appTree = await callRule(
     externalSchematic('@nrwl/angular', 'library', {
-      name: libName
+      name: libName,
     }),
     appTree
   );
   appTree = await callRule(
     externalSchematic('@nrwl/angular', 'component', {
       name: 'test-button',
-      project: libName
+      project: libName,
     }),
     appTree
   );
@@ -92,7 +107,7 @@ export class TestButtonComponent implements OnInit {
   appTree = await callRule(
     externalSchematic('@nrwl/angular', 'component', {
       name: 'test-other',
-      project: libName
+      project: libName,
     }),
     appTree
   );

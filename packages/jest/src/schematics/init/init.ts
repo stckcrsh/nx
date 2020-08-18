@@ -1,30 +1,41 @@
-import { mergeWith, chain, url, Tree } from '@angular-devkit/schematics';
-import { addDepsToPackageJson, updateJsonInTree } from '@nrwl/workspace';
-import {
-  jestVersion,
-  jestTypesVersion,
-  tsJestVersion,
-  nxVersion
-} from '../../utils/versions';
-import { Rule } from '@angular-devkit/schematics';
 import { stripIndents } from '@angular-devkit/core/src/utils/literals';
+import { chain, Rule, Tree } from '@angular-devkit/schematics';
+import {
+  addDepsToPackageJson,
+  readJsonInTree,
+  updateJsonInTree,
+} from '@nrwl/workspace';
+import { noop } from 'rxjs';
+import {
+  babelCoreVersion,
+  babelJestVersion,
+  babelPresetEnvVersion,
+  babelPresetReactVersion,
+  babelPresetTypescriptVersion,
+  jestTypesVersion,
+  jestVersion,
+  nxVersion,
+  tsJestVersion,
+} from '../../utils/versions';
+import { JestInitOptions } from './schema';
 
-const updatePackageJson = chain([
-  addDepsToPackageJson(
-    {},
-    {
-      '@nrwl/jest': nxVersion,
-      jest: jestVersion,
-      '@types/jest': jestTypesVersion,
-      'ts-jest': tsJestVersion
-    }
-  ),
-  updateJsonInTree('package.json', json => {
-    json.dependencies = json.dependencies || {};
-    delete json.dependencies['@nrwl/jest'];
-    return json;
-  })
-]);
+const removeNrwlJestFromDeps = (host: Tree) => {
+  // check whether updating the package.json is necessary
+  const currentPackageJson = readJsonInTree(host, 'package.json');
+
+  if (
+    currentPackageJson.dependencies &&
+    currentPackageJson.dependencies['@nrwl/jest']
+  ) {
+    return updateJsonInTree('package.json', (json) => {
+      json.dependencies = json.dependencies || {};
+      delete json.dependencies['@nrwl/jest'];
+      return json;
+    });
+  } else {
+    return noop();
+  }
+};
 
 const createJestConfig = (host: Tree) => {
   if (!host.exists('jest.config.js')) {
@@ -38,13 +49,35 @@ const createJestConfig = (host: Tree) => {
     },
     resolver: '@nrwl/jest/plugins/resolver',
     moduleFileExtensions: ['ts', 'js', 'html'],
-    coverageReporters: ['html'],
-    passWithNoTests: true
+    coverageReporters: ['html']
   };`
     );
   }
 };
 
-export default function(): Rule {
-  return chain([createJestConfig, updatePackageJson]);
+function updateDependencies(options: JestInitOptions): Rule {
+  const devDeps = {
+    '@nrwl/jest': nxVersion,
+    jest: jestVersion,
+    '@types/jest': jestTypesVersion,
+    'ts-jest': tsJestVersion,
+  };
+
+  if (options.babelJest) {
+    devDeps['@babel/core'] = babelCoreVersion;
+    devDeps['@babel/preset-env'] = babelPresetEnvVersion;
+    devDeps['@babel/preset-typescript'] = babelPresetTypescriptVersion;
+    devDeps['@babel/preset-react'] = babelPresetReactVersion;
+    devDeps['babel-jest'] = babelJestVersion;
+  }
+
+  return addDepsToPackageJson({}, devDeps);
+}
+
+export default function (options: JestInitOptions): Rule {
+  return chain([
+    createJestConfig,
+    updateDependencies(options),
+    removeNrwlJestFromDeps,
+  ]);
 }

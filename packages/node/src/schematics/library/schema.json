@@ -21,14 +21,14 @@
     },
     "directory": {
       "type": "string",
-      "description": "A directory where the app is placed",
+      "description": "A directory where the lib is placed",
       "alias": "d"
     },
     "linter": {
       "description": "The tool to use for running lint checks.",
       "type": "string",
       "enum": ["eslint", "tslint"],
-      "default": "tslint"
+      "default": "eslint"
     },
     "unitTestRunner": {
       "type": "string",
@@ -49,11 +49,26 @@
     "skipTsConfig": {
       "type": "boolean",
       "default": false,
-      "description": "Do not update tsconfig.json for development experience."
+      "description": "Do not update tsconfig.base.json for development experience."
     },
     "publishable": {
       "type": "boolean",
-      "description": "Create a publishable library. A \"build\" architect will be added for this project the workspace configuration."
+      "description": "Create a publishable library."
+    },
+    "buildable": {
+      "type": "boolean",
+      "default": false,
+      "description": "Generate a buildable library."
+    },
+    "importPath": {
+      "type": "string",
+      "description": "The library name used to import it, like @myorg/my-awesome-lib. Must be a valid npm name."
+    },
+    "testEnvironment": {
+      "type": "string",
+      "enum": ["jsdom", "node"],
+      "description": "The test environment to use if unitTestRunner is set to jest",
+      "default": "jsdom"
     }
   },
   "required": ["name"]

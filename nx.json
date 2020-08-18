@@ -1,0 +1,166 @@
+{
+  "npmScope": "nrwl",
+  "implicitDependencies": {
+    "workspace.json": "*",
+    "package.json": {
+      "dependencies": "*",
+      "devDependencies": "*"
+    },
+    "tsconfig.base.json": "*",
+    "tslint.json": "*",
+    "nx.json": "*"
+  },
+  "tasksRunnerOptions": {
+    "default": {
+      "runner": "@nrwl/nx-cloud",
+      "options": {
+        "accessToken": "OTM4MGQ1NDctZGRjMy00ZDlmLThkYzQtOTU3MDhkNWZhZjcwfHJlYWQ=",
+        "cacheableOperations": ["build", "build-base", "test", "lint", "e2e"],
+        "canTrackAnalytics": false,
+        "showUsageWarnings": true,
+        "runtimeCacheInputs": ["echo $SELECTED_CLI"],
+        "cacheDirectory": "/tmp/nx-cache"
+      }
+    }
+  },
+  "workspaceLayout": {
+    "libsDir": "packages"
+  },
+  "projects": {
+    "nx": {
+      "tags": []
+    },
+    "tao": {
+      "tags": []
+    },
+    "workspace": {
+      "tags": [],
+      "implicitDependencies": ["tao", "cli"]
+    },
+    "web": {
+      "tags": [],
+      "implicitDependencies": ["cypress", "workspace", "jest"]
+    },
+    "cypress": {
+      "tags": [],
+      "implicitDependencies": ["workspace"]
+    },
+    "jest": {
+      "tags": [],
+      "implicitDependencies": ["workspace"]
+    },
+    "react": {
+      "tags": [],
+      "implicitDependencies": ["workspace", "cypress", "jest"]
+    },
+    "storybook": {
+      "tags": [],
+      "implicitDependencies": ["cypress", "workspace"]
+    },
+    "nx-plugin": {
+      "tags": [],
+      "implicitDependencies": ["workspace"]
+    },
+    "node": {
+      "tags": [],
+      "implicitDependencies": ["workspace", "jest"]
+    },
+    "next": {
+      "tags": [],
+      "implicitDependencies": ["react"]
+    },
+    "nest": {
+      "tags": [],
+      "implicitDependencies": ["node"]
+    },
+    "linter": {
+      "tags": [],
+      "implicitDependencies": ["workspace"]
+    },
+    "express": {
+      "tags": [],
+      "implicitDependencies": ["node"]
+    },
+    "eslint-plugin-nx": {
+      "tags": [],
+      "implicitDependencies": ["workspace"]
+    },
+    "create-nx-workspace": {
+      "tags": [],
+      "implicitDependencies": ["workspace"]
+    },
+    "create-nx-plugin": {
+      "tags": [],
+      "implicitDependencies": ["nx-plugin"]
+    },
+    "cli": {
+      "tags": []
+    },
+    "bazel": {
+      "tags": [],
+      "implicitDependencies": ["workspace"]
+    },
+    "angular": {
+      "tags": [],
+      "implicitDependencies": ["workspace", "cypress", "jest"]
+    },
+    "e2e-utils": {
+      "tags": []
+    },
+    "e2e-cli": {
+      "tags": [],
+      "implicitDependencies": ["cli"]
+    },
+    "e2e-angular": {
+      "tags": [],
+      "implicitDependencies": ["angular"]
+    },
+    "e2e-bazel": {
+      "tags": [],
+      "implicitDependencies": ["bazel"]
+    },
+    "e2e-cypress": {
+      "tags": [],
+      "implicitDependencies": ["cypress"]
+    },
+    "e2e-jest": {
+      "tags": [],
+      "implicitDependencies": ["jest"]
+    },
+    "e2e-linter": {
+      "tags": [],
+      "implicitDependencies": ["linter"]
+    },
+    "e2e-next": {
+      "tags": [],
+      "implicitDependencies": ["next"]
+    },
+    "e2e-node": {
+      "tags": [],
+      "implicitDependencies": ["node"]
+    },
+    "e2e-nx-plugin": {
+      "tags": [],
+      "implicitDependencies": ["nx-plugin", "create-nx-plugin"]
+    },
+    "e2e-react": {
+      "tags": [],
+      "implicitDependencies": ["react"]
+    },
+    "e2e-storybook": {
+      "tags": [],
+      "implicitDependencies": ["storybook"]
+    },
+    "e2e-web": {
+      "tags": [],
+      "implicitDependencies": ["web"]
+    },
+    "e2e-workspace": {
+      "tags": [],
+      "implicitDependencies": ["workspace", "create-nx-workspace"]
+    }
+  },
+  "affected": {
+    "defaultBase": "master"
+  }
+}

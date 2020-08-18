@@ -28,11 +28,33 @@ nx g library ... --dry-run
 
 ## Options
 
+### addModuleSpec
+
+Default: `false`
+
+Type: `boolean`
+
+Add a module spec file.
+
+### buildable
+
+Default: `false`
+
+Type: `boolean`
+
+Generate a buildable library.
+
 ### directory
 
 Type: `string`
 
-A directory where the app is placed
+A directory where the lib is placed
+
+### importPath
+
+Type: `string`
+
+The library name used to import it, like @myorg/my-awesome-lib. Must be a valid npm name.
 
 ### lazy
 
@@ -41,6 +63,16 @@ Default: `false`
 Type: `boolean`
 
 Add RouterModule.forChild when set to true, and a simple array of routes when set to false.
+
+### linter
+
+Default: `tslint`
+
+Type: `string`
+
+Possible values: `tslint`, `eslint`
+
+The tool to use for running lint checks.
 
 ### name
 
@@ -68,7 +100,7 @@ Default: `false`
 
 Type: `boolean`
 
-Generate a simple TS library when set to true.
+Generate a publishable library.
 
 ### routing
 
@@ -109,6 +141,14 @@ Default: `false`
 Type: `boolean`
 
 Do not update tsconfig.json for development experience.
+
+### strict
+
+Default: `false`
+
+Type: `boolean`
+
+Creates a library with stricter type checking and build optimization options.
 
 ### style
 

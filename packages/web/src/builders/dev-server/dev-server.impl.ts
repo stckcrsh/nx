@@ -1,7 +1,7 @@
 import {
   BuilderContext,
   createBuilder,
-  targetFromTargetString
+  targetFromTargetString,
 } from '@angular-devkit/architect';
 import { JsonObject } from '@angular-devkit/core';
 
@@ -18,9 +18,8 @@ import { buildServePath } from '../../utils/serve-path';
 import { getSourceRoot } from '../../utils/source-root';
 import {
   runWebpackDevServer,
-  DevServerBuildOutput
+  DevServerBuildOutput,
 } from '@angular-devkit/build-webpack';
-import { NodeJsSyncHost } from '@angular-devkit/core/node';
 
 export interface WebDevServerOptions extends JsonObject {
   host: string;
@@ -35,6 +34,8 @@ export interface WebDevServerOptions extends JsonObject {
   liveReload: boolean;
   watch: boolean;
   allowedHosts: string;
+  maxWorkers?: number;
+  memoryLimit?: number;
 }
 
 export default createBuilder<WebDevServerOptions>(run);
@@ -43,10 +44,9 @@ function run(
   serveOptions: WebDevServerOptions,
   context: BuilderContext
 ): Observable<DevServerBuildOutput> {
-  const host = new NodeJsSyncHost();
   return forkJoin(
     getBuildOptions(serveOptions, context),
-    from(getSourceRoot(context, host))
+    from(getSourceRoot(context))
   ).pipe(
     map(([buildOptions, sourceRoot]) => {
       buildOptions = normalizeWebBuildOptions(
@@ -64,7 +64,7 @@ function run(
       if (buildOptions.webpackConfig) {
         webpackConfig = require(buildOptions.webpackConfig)(webpackConfig, {
           buildOptions,
-          configuration: serveOptions.buildTarget.split(':')[2]
+          configuration: serveOptions.buildTarget.split(':')[2],
         });
       }
       return [webpackConfig, buildOptions] as [
@@ -78,7 +78,7 @@ function run(
         protocol: serveOptions.ssl ? 'https' : 'http',
         hostname: serveOptions.host,
         port: serveOptions.port.toString(),
-        pathname: path
+        pathname: path,
       });
 
       context.logger.info(stripIndents`
@@ -88,7 +88,7 @@ function run(
           `);
       if (serveOptions.open) {
         opn(serverUrl, {
-          wait: false
+          wait: false,
         });
       }
       return [_, options, serverUrl] as [
@@ -99,11 +99,13 @@ function run(
     }),
     switchMap(([config, options, serverUrl]) => {
       return runWebpackDevServer(config, context, {
-        logging: stats => {
+        logging: (stats) => {
           context.logger.info(stats.toString(config.stats));
-        }
+        },
+        webpackFactory: require('webpack'),
+        webpackDevServerFactory: require('webpack-dev-server'),
       }).pipe(
-        map(output => {
+        map((output) => {
           output.baseUrl = serverUrl;
           return output;
         })
@@ -114,14 +116,20 @@ function run(
 
 function getBuildOptions(
   options: WebDevServerOptions,
-  context: BuilderContext,
-  overrides?: Partial<WebBuildBuilderOptions>
+  context: BuilderContext
 ): Observable<WebBuildBuilderOptions> {
   const target = targetFromTargetString(options.buildTarget);
+  const overrides: Partial<WebBuildBuilderOptions> = {};
+  if (options.maxWorkers) {
+    overrides.maxWorkers = options.maxWorkers;
+  }
+  if (options.memoryLimit) {
+    overrides.memoryLimit = options.memoryLimit;
+  }
   return from(
     Promise.all([
       context.getTargetOptions(target),
-      context.getBuilderNameForTarget(target)
+      context.getBuilderNameForTarget(target),
     ])
       .then(([options, builderName]) =>
         context.validateOptions<WebBuildBuilderOptions & JsonObject>(
@@ -129,9 +137,9 @@ function getBuildOptions(
           builderName
         )
       )
-      .then(options => ({
+      .then((options) => ({
         ...options,
-        ...overrides
+        ...overrides,
       }))
   );
 }

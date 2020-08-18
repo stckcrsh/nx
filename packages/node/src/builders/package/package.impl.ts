@@ -1,7 +1,7 @@
 import {
   BuilderContext,
   BuilderOutput,
-  createBuilder
+  createBuilder,
 } from '@angular-devkit/architect';
 import { JsonObject } from '@angular-devkit/core';
 import { readJsonFile } from '@nrwl/workspace';
@@ -10,9 +10,20 @@ import { ChildProcess, fork } from 'child_process';
 import { copy, removeSync } from 'fs-extra';
 import * as glob from 'glob';
 import { basename, dirname, join, normalize, relative } from 'path';
-import { Observable, Subscriber } from 'rxjs';
-import { switchMap, tap } from 'rxjs/operators';
+import { Observable, of, Subscriber } from 'rxjs';
+import { map, switchMap, tap } from 'rxjs/operators';
 import * as treeKill from 'tree-kill';
+import {
+  createProjectGraph,
+  ProjectGraph,
+} from '@nrwl/workspace/src/core/project-graph';
+import {
+  calculateProjectDependencies,
+  checkDependentProjectsHaveBeenBuilt,
+  createTmpTsConfig,
+  DependentBuildableProjectNode,
+  updateBuildableProjectPackageJsonDependencies,
+} from '@nrwl/workspace/src/utils/buildable-libs-utils';
 
 export interface NodePackageBuilderOptions extends JsonObject {
   main: string;
@@ -22,10 +33,12 @@ export interface NodePackageBuilderOptions extends JsonObject {
   sourceMap: boolean;
   assets: Array<AssetGlob | string>;
   packageJson: string;
+  updateBuildableProjectDepsInPackageJson?: boolean;
 }
 
 interface NormalizedBuilderOptions extends NodePackageBuilderOptions {
   files: Array<FileInputOutput>;
+  normalizedOutputPath: string;
   relativeMainFileOutput: string;
 }
 
@@ -38,19 +51,56 @@ type AssetGlob = FileInputOutput & {
   ignore: string[];
 };
 
+/**
+ * -----------------------------------------------------------
+ */
+
 export default createBuilder(runNodePackageBuilder);
 
 export function runNodePackageBuilder(
   options: NodePackageBuilderOptions,
   context: BuilderContext
 ) {
+  const projGraph = createProjectGraph();
   const normalizedOptions = normalizeOptions(options, context);
-  return compileTypeScriptFiles(normalizedOptions, context).pipe(
-    tap(() => {
-      updatePackageJson(normalizedOptions, context);
+  const { target, dependencies } = calculateProjectDependencies(
+    projGraph,
+    context
+  );
+
+  return of(checkDependentProjectsHaveBeenBuilt(context, dependencies)).pipe(
+    switchMap((result) => {
+      if (result) {
+        return compileTypeScriptFiles(
+          normalizedOptions,
+          context,
+          projGraph,
+          dependencies
+        ).pipe(
+          tap(() => {
+            updatePackageJson(normalizedOptions, context);
+            if (
+              dependencies.length > 0 &&
+              options.updateBuildableProjectDepsInPackageJson
+            ) {
+              updateBuildableProjectPackageJsonDependencies(
+                context,
+                target,
+                dependencies
+              );
+            }
+          }),
+          switchMap(() => copyAssetFiles(normalizedOptions, context))
+        );
+      } else {
+        return of({ success: false });
+      }
     }),
-    switchMap(() => {
-      return copyAssetFiles(normalizedOptions, context);
+    map((value) => {
+      return {
+        ...value,
+        outputPath: normalizedOptions.outputPath,
+      };
     })
   );
 }
@@ -69,16 +119,17 @@ function normalizeOptions(
   ) => {
     return glob.sync(pattern, {
       cwd: input,
-      ignore: ignore
+      nodir: true,
+      ignore,
     });
   };
 
-  options.assets.forEach(asset => {
+  options.assets.forEach((asset) => {
     if (typeof asset === 'string') {
-      globbedFiles(asset, context.workspaceRoot).forEach(globbedFile => {
+      globbedFiles(asset, context.workspaceRoot).forEach((globbedFile) => {
         files.push({
           input: join(context.workspaceRoot, globbedFile),
-          output: join(context.workspaceRoot, outDir, basename(globbedFile))
+          output: join(context.workspaceRoot, outDir, basename(globbedFile)),
         });
       });
     } else {
@@ -86,10 +137,15 @@ function normalizeOptions(
         asset.glob,
         join(context.workspaceRoot, asset.input),
         asset.ignore
-      ).forEach(globbedFile => {
+      ).forEach((globbedFile) => {
         files.push({
           input: join(context.workspaceRoot, asset.input, globbedFile),
-          output: join(context.workspaceRoot, outDir, asset.output, globbedFile)
+          output: join(
+            context.workspaceRoot,
+            outDir,
+            asset.output,
+            globbedFile
+          ),
         });
       });
     }
@@ -109,29 +165,38 @@ function normalizeOptions(
   return {
     ...options,
     files,
-    relativeMainFileOutput
+    relativeMainFileOutput,
+    normalizedOutputPath: join(context.workspaceRoot, options.outputPath),
   };
 }
 
 let tscProcess: ChildProcess;
 function compileTypeScriptFiles(
   options: NormalizedBuilderOptions,
-  context: BuilderContext
+  context: BuilderContext,
+  projGraph: ProjectGraph,
+  projectDependencies: DependentBuildableProjectNode[]
 ): Observable<BuilderOutput> {
   if (tscProcess) {
     killProcess(context);
   }
   // Cleaning the /dist folder
-  removeSync(join(context.workspaceRoot, options.outputPath));
+  removeSync(options.normalizedOutputPath);
+  let tsConfigPath = join(context.workspaceRoot, options.tsConfig);
 
   return Observable.create((subscriber: Subscriber<BuilderOutput>) => {
+    if (projectDependencies.length > 0) {
+      const libRoot = projGraph.nodes[context.target.project].data.root;
+      tsConfigPath = createTmpTsConfig(
+        tsConfigPath,
+        context.workspaceRoot,
+        libRoot,
+        projectDependencies
+      );
+    }
+
     try {
-      let args = [
-        '-p',
-        join(context.workspaceRoot, options.tsConfig),
-        '--outDir',
-        join(context.workspaceRoot, options.outputPath)
-      ];
+      let args = ['-p', tsConfigPath, '--outDir', options.normalizedOutputPath];
 
       if (options.sourceMap) {
         args.push('--sourceMap');
@@ -147,11 +212,15 @@ function compileTypeScriptFiles(
         tscProcess = fork(tscPath, args, { stdio: [0, 1, 2, 'ipc'] });
         subscriber.next({ success: true });
       } else {
-        context.logger.info('Compiling TypeScript files...');
+        context.logger.info(
+          `Compiling TypeScript files for library ${context.target.project}...`
+        );
         tscProcess = fork(tscPath, args, { stdio: [0, 1, 2, 'ipc'] });
-        tscProcess.on('exit', code => {
+        tscProcess.on('exit', (code) => {
           if (code === 0) {
-            context.logger.info('Done compiling TypeScript files.');
+            context.logger.info(
+              `Done compiling TypeScript files for library ${context.target.project}`
+            );
             subscriber.next({ success: true });
           } else {
             subscriber.error('Could not compile Typescript files');
@@ -171,7 +240,7 @@ function compileTypeScriptFiles(
 }
 
 function killProcess(context: BuilderContext): void {
-  return treeKill(tscProcess.pid, 'SIGTERM', error => {
+  return treeKill(tscProcess.pid, 'SIGTERM', (error) => {
     tscProcess = null;
     if (error) {
       if (Array.isArray(error) && error[0] && error[2]) {
@@ -201,6 +270,7 @@ function updatePackageJson(
   packageJson.typings = normalize(
     `./${options.relativeMainFileOutput}/${typingsFile}`
   );
+
   writeJsonFile(`${options.outputPath}/package.json`, packageJson);
 }
 
@@ -209,16 +279,17 @@ function copyAssetFiles(
   context: BuilderContext
 ): Promise<BuilderOutput> {
   context.logger.info('Copying asset files...');
-  return Promise.all(options.files.map(file => copy(file.input, file.output)))
+  return Promise.all(options.files.map((file) => copy(file.input, file.output)))
     .then(() => {
       context.logger.info('Done copying asset files.');
       return {
-        success: true
+        success: true,
       };
     })
-    .catch(err => {
+    .catch((err: Error) => {
       return {
-        success: false
+        error: err.message,
+        success: false,
       };
     });
 }

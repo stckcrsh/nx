@@ -5,6 +5,7 @@ import { appRootPath } from '../utils/app-root';
 import { output } from '../utils/output';
 
 export const packagesWeCareAbout = [
+  'nx',
   '@nrwl/angular',
   '@nrwl/cli',
   '@nrwl/cypress',
@@ -20,14 +21,14 @@ export const packagesWeCareAbout = [
   '@nrwl/tao',
   '@nrwl/web',
   '@nrwl/workspace',
-  'typescript'
+  'typescript',
 ];
 
 export const report = {
   command: 'report',
   describe: 'Reports useful version numbers to copy into the Nx issue template',
-  builder: yargs => yargs,
-  handler: reportHandler
+  builder: (yargs) => yargs,
+  handler: reportHandler,
 };
 
 /**
@@ -42,7 +43,7 @@ function reportHandler() {
   const nodeModulesDir = path.join(appRootPath, 'node_modules');
   const bodyLines = [];
 
-  packagesWeCareAbout.forEach(p => {
+  packagesWeCareAbout.forEach((p) => {
     let status = 'Not Found';
     try {
       const packageJson = JSON.parse(
@@ -55,6 +56,6 @@ function reportHandler() {
 
   output.log({
     title: 'Report complete - copy this into the issue template',
-    bodyLines
+    bodyLines,
   });
 }

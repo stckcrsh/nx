@@ -7,12 +7,20 @@ import { NxJson } from '../core/shared-interfaces';
 export interface Task {
   id: string;
   target: Target;
-  overrides: Object;
+  overrides: any;
+  hash?: string;
+  projectRoot?: string;
+  hashDetails?: {
+    command: string;
+    sources: { [projectName: string]: string };
+    implicitDeps: { [key: string]: string };
+    runtime: { [input: string]: string };
+  };
 }
 
 export enum AffectedEventType {
   TaskComplete = '[Task] Complete',
-  TaskCacheRead = '[Task] CacheRead'
+  TaskCacheRead = '[Task] CacheRead',
 }
 
 export interface AffectedEvent {
@@ -30,6 +38,7 @@ export type TasksRunner<T = unknown> = (
   options: T,
   context?: {
     target?: string;
+    initiatingProject?: string | null;
     projectGraph: ProjectGraph;
     nxJson: NxJson;
   }

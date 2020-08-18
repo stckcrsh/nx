@@ -40,11 +40,17 @@ nx g lib mylib --directory=myapp
 
 Type: `string`
 
-A directory where the app is placed
+A directory where the lib is placed
+
+### importPath
+
+Type: `string`
+
+The library name used to import it, like @myorg/my-awesome-lib
 
 ### linter
 
-Default: `tslint`
+Default: `eslint`
 
 Type: `string`
 
@@ -79,6 +85,16 @@ Do not update tsconfig.json for development experience.
 Type: `string`
 
 Add tags to the library (used for linting)
+
+### testEnvironment
+
+Default: `jsdom`
+
+Type: `string`
+
+Possible values: `jsdom`, `node`
+
+The test environment to use if unitTestRunner is set to jest
 
 ### unitTestRunner
 

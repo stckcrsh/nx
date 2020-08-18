@@ -36,17 +36,31 @@ nx g lib mylib --directory=myapp
 
 ## Options
 
+### buildable
+
+Default: `false`
+
+Type: `boolean`
+
+Generate a buildable library.
+
 ### directory
 
 Alias(es): d
 
 Type: `string`
 
-A directory where the app is placed
+A directory where the lib is placed
+
+### importPath
+
+Type: `string`
+
+The library name used to import it, like @myorg/my-awesome-lib. Must be a valid npm name.
 
 ### linter
 
-Default: `tslint`
+Default: `eslint`
 
 Type: `string`
 
@@ -64,7 +78,7 @@ Library name
 
 Type: `boolean`
 
-Create a publishable library. A "build" architect will be added for this project the workspace configuration.
+Create a publishable library.
 
 ### skipFormat
 
@@ -80,7 +94,7 @@ Default: `false`
 
 Type: `boolean`
 
-Do not update tsconfig.json for development experience.
+Do not update tsconfig.base.json for development experience.
 
 ### tags
 
@@ -89,6 +103,16 @@ Alias(es): t
 Type: `string`
 
 Add tags to the library (used for linting)
+
+### testEnvironment
+
+Default: `jsdom`
+
+Type: `string`
+
+Possible values: `jsdom`, `node`
+
+The test environment to use if unitTestRunner is set to jest
 
 ### unitTestRunner
 

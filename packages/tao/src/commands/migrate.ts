@@ -1,18 +1,19 @@
 import { logging, normalize, virtualFs } from '@angular-devkit/core';
-import * as core from '@angular-devkit/core/node';
 import { NodeJsSyncHost } from '@angular-devkit/core/node';
+import { TaskExecutor } from '@angular-devkit/schematics';
 import { BaseWorkflow } from '@angular-devkit/schematics/src/workflow';
+import { BuiltinTaskExecutor } from '@angular-devkit/schematics/tasks/node';
+import { NodePackageName } from '@angular-devkit/schematics/tasks/package-manager/options';
 import { NodeModulesEngineHost } from '@angular-devkit/schematics/tools';
 import { execSync } from 'child_process';
 import { readFileSync, writeFileSync } from 'fs';
-import * as path from 'path';
+import * as minimist from 'minimist';
+import { dirname, extname, join, resolve } from 'path';
 import { gt, lte } from 'semver';
 import * as stripJsonComments from 'strip-json-comments';
 import { dirSync } from 'tmp';
 import { getLogger } from '../shared/logger';
 import { convertToCamelCase, handleErrors } from '../shared/params';
-import { commandName } from '../shared/print-help';
-import minimist = require('minimist');
 
 export type MigrationsJson = {
   version: string;
@@ -30,6 +31,39 @@ export type MigrationsJson = {
     };
   };
 };
+
+export function normalizeVersion(version: string) {
+  const [v, t] = version.split('-');
+  const [major, minor, patch] = v.split('.');
+  const newV = `${major || 0}.${minor || 0}.${patch || 0}`;
+  const newVersion = t ? `${newV}-${t}` : newV;
+
+  try {
+    gt(newVersion, '0.0.0');
+    return newVersion;
+  } catch (e) {
+    try {
+      gt(newV, '0.0.0');
+      return newV;
+    } catch (e) {
+      const withoutPatch = `${major || 0}.${minor || 0}.0`;
+      try {
+        if (gt(withoutPatch, '0.0.0')) {
+          return withoutPatch;
+        }
+      } catch (e) {
+        const withoutPatchAndMinor = `${major || 0}.0.0`;
+        try {
+          if (gt(withoutPatchAndMinor, '0.0.0')) {
+            return withoutPatchAndMinor;
+          }
+        } catch (e) {
+          return '0.0.0';
+        }
+      }
+    }
+  }
+}
 
 export class Migrator {
   private readonly versions: (p: string) => string;
@@ -63,7 +97,7 @@ export class Migrator {
     [k: string]: { version: string; alwaysAddToPackageJson: boolean };
   }) {
     const migrations = await Promise.all(
-      Object.keys(versions).map(async c => {
+      Object.keys(versions).map(async (c) => {
         const currentVersion = this.versions(c);
         if (currentVersion === null) return [];
 
@@ -72,14 +106,14 @@ export class Migrator {
         if (!migrationsJson.schematics) return [];
         return Object.keys(migrationsJson.schematics)
           .filter(
-            r =>
+            (r) =>
               this.gt(migrationsJson.schematics[r].version, currentVersion) &
               this.lte(migrationsJson.schematics[r].version, target.version)
           )
-          .map(r => ({
+          .map((r) => ({
             ...migrationsJson.schematics[r],
             package: c,
-            name: r
+            name: r,
           }));
       })
     );
@@ -103,8 +137,8 @@ export class Migrator {
       return {
         [targetPackage]: {
           version: target.version,
-          alwaysAddToPackageJson: !!target.alwaysAddToPackageJson
-        }
+          alwaysAddToPackageJson: !!target.alwaysAddToPackageJson,
+        },
       };
     }
 
@@ -129,22 +163,22 @@ export class Migrator {
 
     const childCalls = await Promise.all(
       Object.keys(packages)
-        .filter(r => {
+        .filter((r) => {
           return (
             !collectedVersions[r] ||
             this.gt(packages[r].version, collectedVersions[r].version)
           );
         })
-        .map(u =>
+        .map((u) =>
           this._updatePackageJson(u, packages[u], {
             ...collectedVersions,
-            [targetPackage]: target
+            [targetPackage]: target,
           })
         )
     );
     return childCalls.reduce(
       (m, c) => {
-        Object.keys(c).forEach(r => {
+        Object.keys(c).forEach((r) => {
           if (!m[r] || this.gt(c[r].version, m[r].version)) {
             m[r] = c[r];
           }
@@ -154,8 +188,8 @@ export class Migrator {
       {
         [targetPackage]: {
           version: migrationsJson.version,
-          alwaysAddToPackageJson: target.alwaysAddToPackageJson || false
-        }
+          alwaysAddToPackageJson: target.alwaysAddToPackageJson || false,
+        },
       }
     );
   }
@@ -182,23 +216,24 @@ export class Migrator {
           '@nrwl/nest',
           '@nrwl/next',
           '@nrwl/node',
+          '@nrwl/nx-plugin',
           '@nrwl/react',
           '@nrwl/storybook',
           '@nrwl/tao',
-          '@nrwl/web'
+          '@nrwl/web',
         ].reduce(
           (m, c) => ({
             ...m,
-            [c]: { version: targetVersion, alwaysAddToPackageJson: false }
+            [c]: { version: targetVersion, alwaysAddToPackageJson: false },
           }),
           {}
-        )
+        ),
       };
     }
     if (!m.packageJsonUpdates || !this.versions(packageName)) return {};
 
     return Object.keys(m.packageJsonUpdates)
-      .filter(r => {
+      .filter((r) => {
         return (
           this.gt(
             m.packageJsonUpdates[r].version,
@@ -206,13 +241,13 @@ export class Migrator {
           ) && this.lte(m.packageJsonUpdates[r].version, targetVersion)
         );
       })
-      .map(r => m.packageJsonUpdates[r].packages)
-      .map(packages => {
+      .map((r) => m.packageJsonUpdates[r].packages)
+      .map((packages) => {
         if (!packages) return {};
 
         return Object.keys(packages)
           .filter(
-            p =>
+            (p) =>
               !packages[p].ifPackageInstalled ||
               this.versions(packages[p].ifPackageInstalled)
           )
@@ -221,8 +256,8 @@ export class Migrator {
               ...m,
               [c]: {
                 version: packages[c].version,
-                alwaysAddToPackageJson: packages[c].alwaysAddToPackageJson
-              }
+                alwaysAddToPackageJson: packages[c].alwaysAddToPackageJson,
+              },
             }),
             {}
           );
@@ -231,19 +266,76 @@ export class Migrator {
   }
 
   private gt(v1: string, v2: string) {
-    return gt(this.normalizeVersion(v1), this.normalizeVersion(v2));
+    return gt(normalizeVersion(v1), normalizeVersion(v2));
   }
 
   private lte(v1: string, v2: string) {
-    return lte(this.normalizeVersion(v1), this.normalizeVersion(v2));
+    return lte(normalizeVersion(v1), normalizeVersion(v2));
+  }
+}
+
+function normalizeVersionWithTagCheck(version: string) {
+  if (version === 'latest' || version === 'next') return version;
+  return normalizeVersion(version);
+}
+
+function versionOverrides(overrides: string, param: string) {
+  const res = {};
+  overrides.split(',').forEach((p) => {
+    const split = p.lastIndexOf('@');
+    if (split === -1 || split === 0) {
+      throw new Error(
+        `Incorrect '${param}' section. Use --${param}="package@version"`
+      );
+    }
+    const selectedPackage = p.substring(0, split).trim();
+    const selectedVersion = p.substring(split + 1).trim();
+    if (!selectedPackage || !selectedVersion) {
+      throw new Error(
+        `Incorrect '${param}' section. Use --${param}="package@version"`
+      );
+    }
+    res[selectedPackage] = normalizeVersionWithTagCheck(selectedVersion);
+  });
+  return res;
+}
+
+function parseTargetPackageAndVersion(args: string) {
+  if (!args) {
+    throw new Error(
+      `Provide the correct package name and version. E.g., @nrwl/workspace@9.0.0.`
+    );
   }
 
-  private normalizeVersion(v: string) {
-    if (v.startsWith('8-')) return '8.0.0-beta.1';
-    if (v.startsWith('9-')) return '9.0.0-beta.1';
-    if (v.startsWith('10-')) return '9.0.0-beta.1';
-    if (v.startsWith('11-')) return '9.0.0-beta.1';
-    return v;
+  if (args.indexOf('@') > -1) {
+    const i = args.lastIndexOf('@');
+    if (i === 0) {
+      const targetPackage = args.trim();
+      const targetVersion = 'latest';
+      return { targetPackage, targetVersion };
+    } else {
+      const targetPackage = args.substring(0, i);
+      const maybeVersion = args.substring(i + 1);
+      if (!targetPackage || !maybeVersion) {
+        throw new Error(
+          `Provide the correct package name and version. E.g., @nrwl/workspace@9.0.0.`
+        );
+      }
+      const targetVersion = normalizeVersionWithTagCheck(maybeVersion);
+      return { targetPackage, targetVersion };
+    }
+  } else {
+    if (args.match(/[0-9]/) || args === 'latest' || args === 'next') {
+      return {
+        targetPackage: '@nrwl/workspace',
+        targetVersion: normalizeVersionWithTagCheck(args),
+      };
+    } else {
+      return {
+        targetPackage: args,
+        targetVersion: 'latest',
+      };
+    }
   }
 }
 
@@ -256,57 +348,37 @@ type GenerateMigrations = {
 };
 type RunMigrations = { type: 'runMigrations'; runMigrations: string };
 
-function parseMigrationsOptions(
+export function parseMigrationsOptions(
   args: string[]
 ): GenerateMigrations | RunMigrations {
   const options = convertToCamelCase(
     minimist(args, {
       string: ['runMigrations', 'from', 'to'],
       alias: {
-        runMigrations: 'run-migrations'
-      }
+        runMigrations: 'run-migrations',
+      },
     })
   );
   if (!options.runMigrations) {
-    let from = {};
-    if (options.from) {
-      options.from.split(',').forEach(p => {
-        const split = p.lastIndexOf('@');
-        from[p.substring(0, split)] = p.substring(split + 1);
-      });
-    }
-
-    let to = {};
-    if (options.to) {
-      options.to.split(',').forEach(p => {
-        const split = p.lastIndexOf('@');
-        to[p.substring(0, split)] = p.substring(split + 1);
-      });
-    }
-
-    let targetPackage;
-    let targetVersion;
-    if (args[0] && args[0].indexOf('@') > 1) {
-      const i = args[0].lastIndexOf('@');
-      targetPackage = args[0].substring(0, i);
-      targetVersion = args[0].substring(i + 1);
-    } else if (args[0]) {
-      targetPackage = '@nrwl/workspace';
-      targetVersion = args[0];
-    } else {
-      targetPackage = '@nrwl/workspace';
-      targetVersion = 'latest';
-    }
-
+    const from = options.from
+      ? versionOverrides(options.from as string, 'from')
+      : {};
+    const to = options.to ? versionOverrides(options.to as string, 'to') : {};
+    const { targetPackage, targetVersion } = parseTargetPackageAndVersion(
+      args[0]
+    );
     return {
       type: 'generateMigrations',
       targetPackage,
       targetVersion,
       from,
-      to
+      to,
     };
   } else {
-    return { type: 'runMigrations', runMigrations: options.runMigrations };
+    return {
+      type: 'runMigrations',
+      runMigrations: options.runMigrations as string,
+    };
   }
 }
 
@@ -317,7 +389,7 @@ function versions(root: string, from: { [p: string]: string }) {
         return from[packageName];
       }
       const content = readFileSync(
-        path.join(root, `./node_modules/${packageName}/package.json`)
+        join(root, `./node_modules/${packageName}/package.json`)
       );
       return JSON.parse(stripJsonComments(content.toString()))['version'];
     } catch (e) {
@@ -328,7 +400,7 @@ function versions(root: string, from: { [p: string]: string }) {
 
 // testing-fetch-start
 function createFetcher(logger: logging.Logger) {
-  let cache = {};
+  const cache = {};
   return async function f(
     packageName: string,
     packageVersion: string
@@ -337,12 +409,12 @@ function createFetcher(logger: logging.Logger) {
       const dir = dirSync().name;
       logger.info(`Fetching ${packageName}@${packageVersion}`);
       execSync(`npm install ${packageName}@${packageVersion} --prefix=${dir}`, {
-        stdio: []
+        stdio: [],
       });
       const json = JSON.parse(
         stripJsonComments(
           readFileSync(
-            path.join(dir, 'node_modules', packageName, 'package.json')
+            join(dir, 'node_modules', packageName, 'package.json')
           ).toString()
         )
       );
@@ -361,18 +433,18 @@ function createFetcher(logger: logging.Logger) {
           const json = JSON.parse(
             stripJsonComments(
               readFileSync(
-                path.join(dir, 'node_modules', packageName, migrationsFile)
+                join(dir, 'node_modules', packageName, migrationsFile)
               ).toString()
             )
           );
           cache[`${packageName}-${packageVersion}`] = {
             version: resolvedVersion,
             schematics: json.schematics,
-            packageJsonUpdates: json.packageJsonUpdates
+            packageJsonUpdates: json.packageJsonUpdates,
           };
         } else {
           cache[`${packageName}-${packageVersion}`] = {
-            version: resolvedVersion
+            version: resolvedVersion,
           };
         }
       } catch (e) {
@@ -380,7 +452,7 @@ function createFetcher(logger: logging.Logger) {
           `Could not find '${migrationsFile}' in '${packageName}'. Skipping it`
         );
         cache[`${packageName}-${packageVersion}`] = {
-          version: resolvedVersion
+          version: resolvedVersion,
         };
       }
     }
@@ -390,9 +462,16 @@ function createFetcher(logger: logging.Logger) {
 
 // testing-fetch-end
 
-function createMigrationsFile(root: string, migrations: any[]) {
+function createMigrationsFile(
+  root: string,
+  migrations: {
+    package: string;
+    name: string;
+    version: string;
+  }[]
+) {
   writeFileSync(
-    path.join(root, 'migrations.json'),
+    join(root, 'migrations.json'),
     JSON.stringify({ migrations }, null, 2)
   );
 }
@@ -403,11 +482,11 @@ function updatePackageJson(
     [p: string]: { version: string; alwaysAddToPackageJson: boolean };
   }
 ) {
-  const packageJsonPath = path.join(root, 'package.json');
+  const packageJsonPath = join(root, 'package.json');
   const json = JSON.parse(
     stripJsonComments(readFileSync(packageJsonPath).toString())
   );
-  Object.keys(updatedPackages).forEach(p => {
+  Object.keys(updatedPackages).forEach((p) => {
     if (json.devDependencies && json.devDependencies[p]) {
       json.devDependencies[p] = updatedPackages[p].version;
     } else if (json.dependencies && json.dependencies[p]) {
@@ -437,7 +516,7 @@ async function generateMigrationsJsonAndUpdatePackageJson(
       versions: versions(root, opts.from),
       fetch: createFetcher(logger),
       from: opts.from,
-      to: opts.to
+      to: opts.to,
     });
     const { migrations, packageJson } = await migrator.updatePackageJson(
       opts.targetPackage,
@@ -448,26 +527,31 @@ async function generateMigrationsJsonAndUpdatePackageJson(
     if (migrations.length > 0) {
       createMigrationsFile(root, migrations);
 
-      logger.info(`The migrate command has run successfully.`);
+      logger.info(`NX The migrate command has run successfully.`);
       logger.info(`- package.json has been updated`);
       logger.info(`- migrations.json has been generated`);
 
-      logger.info(`Next steps:`);
+      logger.info(`NX Next steps:`);
       logger.info(
         `- Make sure package.json changes make sense and then run 'npm install' or 'yarn'`
       );
       logger.info(`- Run 'nx migrate --run-migrations=migrations.json'`);
     } else {
-      logger.info(`The migrate command has run successfully.`);
+      logger.info(`NX The migrate command has run successfully.`);
       logger.info(`- package.json has been updated`);
       logger.info(
         `- there are no migrations to run, so migrations.json has not been created.`
+      );
+
+      logger.info(`NX Next steps:`);
+      logger.info(
+        `- Make sure package.json changes make sense and then run 'npm install' or 'yarn'`
       );
     }
   } catch (e) {
     const startVersion = versions(root, {})('@nrwl/workspace');
     logger.error(
-      `The migrate command failed. Try the following to migrate your workspace:`
+      `NX The migrate command failed. Try the following to migrate your workspace:`
     );
     logger.error(`> npm install --save-dev @nrwl/workspace@latest`);
     logger.error(
@@ -484,38 +568,58 @@ async function generateMigrationsJsonAndUpdatePackageJson(
 }
 
 class MigrationEngineHost extends NodeModulesEngineHost {
-  constructor() {
+  private nodeInstallLogPrinted = false;
+
+  constructor(logger: logging.Logger) {
     super();
+
+    // Overwrite the original CLI node package executor with a new one that does basically nothing
+    // since nx migrate doesn't do npm installs by itself
+    // (https://github.com/angular/angular-cli/blob/5df776780deadb6be5048b3ab006a5d3383650dc/packages/angular_devkit/schematics/tools/workflow/node-workflow.ts#L41)
+    this.registerTaskExecutor({
+      name: NodePackageName,
+      create: () =>
+        Promise.resolve<TaskExecutor>(() => {
+          return new Promise((res) => {
+            if (!this.nodeInstallLogPrinted) {
+              logger.warn(
+                `An installation of node_modules has been required. Make sure to run it after the migration`
+              );
+              this.nodeInstallLogPrinted = true;
+            }
+
+            res();
+          });
+        }),
+    });
+
+    this.registerTaskExecutor(BuiltinTaskExecutor.RunSchematic);
   }
 
   protected _resolveCollectionPath(name: string): string {
     let collectionPath: string | undefined = undefined;
 
-    if (name.replace(/\\/g, '/').split('/').length > (name[0] == '@' ? 2 : 1)) {
-      try {
-        collectionPath = this._resolvePath(name, process.cwd());
-      } catch {}
+    if (name.startsWith('.') || name.startsWith('/')) {
+      name = resolve(name);
     }
 
-    if (!collectionPath) {
-      let packageJsonPath = this._resolvePackageJson(name, process.cwd());
-      if (!core.fs.isFile(packageJsonPath)) {
-        packageJsonPath = path.join(packageJsonPath, 'package.json');
-      }
-      let pkgJsonSchematics = require(packageJsonPath)['nx-migrations'];
+    if (extname(name)) {
+      collectionPath = require.resolve(name);
+    } else {
+      const packageJsonPath = require.resolve(join(name, 'package.json'));
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const packageJson = require(packageJsonPath);
+      let pkgJsonSchematics = packageJson['nx-migrations'];
       if (!pkgJsonSchematics) {
-        pkgJsonSchematics = require(packageJsonPath)['ng-update'];
+        pkgJsonSchematics = packageJson['ng-update'];
         if (!pkgJsonSchematics) {
-          throw new Error(`Could find migrations in package: "${name}"`);
+          throw new Error(`Could not find migrations in package: "${name}"`);
         }
       }
       if (typeof pkgJsonSchematics != 'string') {
         pkgJsonSchematics = pkgJsonSchematics.migrations;
       }
-      collectionPath = this._resolvePath(
-        pkgJsonSchematics,
-        path.dirname(packageJsonPath)
-      );
+      collectionPath = resolve(dirname(packageJsonPath), pkgJsonSchematics);
     }
 
     try {
@@ -531,12 +635,12 @@ class MigrationEngineHost extends NodeModulesEngineHost {
 }
 
 class MigrationsWorkflow extends BaseWorkflow {
-  constructor(host: virtualFs.Host) {
+  constructor(host: virtualFs.Host, logger: logging.Logger) {
     super({
       host,
-      engineHost: new MigrationEngineHost(),
+      engineHost: new MigrationEngineHost(logger),
       force: true,
-      dryRun: false
+      dryRun: false,
     });
   }
 }
@@ -547,15 +651,13 @@ async function runMigrations(
   opts: { runMigrations: string }
 ) {
   const migrationsFile = JSON.parse(
-    stripJsonComments(
-      readFileSync(path.join(root, opts.runMigrations)).toString()
-    )
+    stripJsonComments(readFileSync(join(root, opts.runMigrations)).toString())
   );
 
   const host = new virtualFs.ScopedHost(new NodeJsSyncHost(), normalize(root));
-  const workflow = new MigrationsWorkflow(host);
+  const workflow = new MigrationsWorkflow(host, logger);
   let p = Promise.resolve(null);
-  migrationsFile.migrations.forEach(m => {
+  migrationsFile.migrations.forEach((m) => {
     p = p.then(() => {
       logger.info(`Running migration ${m.package}:${m.name}`);
       return workflow
@@ -564,7 +666,7 @@ async function runMigrations(
           schematic: m.name,
           options: {},
           debug: false,
-          logger
+          logger,
         })
         .toPromise()
         .then(() => {
@@ -579,11 +681,7 @@ async function runMigrations(
   await p;
 }
 
-export async function migrate(
-  root: string,
-  args: string[],
-  isVerbose: boolean = false
-) {
+export async function migrate(root: string, args: string[], isVerbose = false) {
   const logger = getLogger(isVerbose);
 
   return handleErrors(logger, isVerbose, async () => {

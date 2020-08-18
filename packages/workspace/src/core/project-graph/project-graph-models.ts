@@ -10,13 +10,17 @@ export interface ProjectGraph {
 export enum DependencyType {
   static = 'static',
   dynamic = 'dynamic',
-  implicit = 'implicit'
+  implicit = 'implicit',
 }
 
 export interface ProjectGraphNode<T extends {} = {}> {
   type: string;
   name: string;
-  data: T & { files: FileData[]; [k: string]: any };
+  data: T & {
+    architect?: { [k: string]: any };
+    files: FileData[];
+    [k: string]: any;
+  };
 }
 
 export type ProjectGraphNodeRecords = Record<string, ProjectGraphNode>;
@@ -44,5 +48,5 @@ export interface ProjectGraphContext {
 export enum ProjectType {
   app = 'app',
   e2e = 'e2e',
-  lib = 'lib'
+  lib = 'lib',
 }

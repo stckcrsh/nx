@@ -10,44 +10,55 @@ import {
   noop,
   Rule,
   SchematicContext,
+  SchematicsException,
   template,
   Tree,
-  url
+  url,
 } from '@angular-devkit/schematics';
 import {
   formatFiles,
-  getProjectConfig,
+  getNpmScope,
   names,
   offsetFromRoot,
   toFileName,
-  updateJsonInTree,
-  updateWorkspaceInTree
+  updateWorkspaceInTree,
 } from '@nrwl/workspace';
 import { Schema } from './schema';
+import { libsDir } from '@nrwl/workspace/src/utils/ast-utils';
 
 export interface NormalizedSchema extends Schema {
   name: string;
+  prefix: string;
   fileName: string;
   projectRoot: Path;
   projectDirectory: string;
   parsedTags: string[];
 }
 
-export default function(schema: NormalizedSchema): Rule {
+export default function (schema: NormalizedSchema): Rule {
   return (host: Tree, context: SchematicContext) => {
-    const options = normalizeOptions(schema);
+    const options = normalizeOptions(host, schema);
+
+    if (options.publishable === true && !schema.importPath) {
+      throw new SchematicsException(
+        `For publishable libs you have to provide a proper "--importPath" which needs to be a valid npm package name (e.g. my-awesome-lib or @myorg/my-lib)`
+      );
+    }
 
     return chain([
-      externalSchematic('@nrwl/workspace', 'lib', schema),
+      externalSchematic('@nrwl/workspace', 'lib', {
+        ...schema,
+        importPath: options.importPath,
+      }),
       createFiles(options),
-      updateTsConfig(options),
       addProject(options),
-      formatFiles(options)
+      formatFiles(options),
     ]);
   };
 }
 
-function normalizeOptions(options: Schema): NormalizedSchema {
+function normalizeOptions(host: Tree, options: Schema): NormalizedSchema {
+  const defaultPrefix = getNpmScope(host);
   const name = toFileName(options.name);
   const projectDirectory = options.directory
     ? `${toFileName(options.directory)}/${name}`
@@ -55,22 +66,25 @@ function normalizeOptions(options: Schema): NormalizedSchema {
 
   const projectName = projectDirectory.replace(new RegExp('/', 'g'), '-');
   const fileName = projectName;
-  const projectRoot = normalize(`libs/${projectDirectory}`);
+  const projectRoot = normalize(`${libsDir(host)}/${projectDirectory}`);
 
   const parsedTags = options.tags
-    ? options.tags.split(',').map(s => s.trim())
+    ? options.tags.split(',').map((s) => s.trim())
     : [];
 
-  const normalized: NormalizedSchema = {
+  const importPath =
+    options.importPath || `@${defaultPrefix}/${projectDirectory}`;
+
+  return {
     ...options,
+    prefix: defaultPrefix, // we could also allow customizing this
     fileName,
     name: projectName,
     projectRoot,
     projectDirectory,
-    parsedTags
+    parsedTags,
+    importPath,
   };
-
-  return normalized;
 }
 
 function createFiles(options: NormalizedSchema): Rule {
@@ -80,51 +94,37 @@ function createFiles(options: NormalizedSchema): Rule {
         ...options,
         ...names(options.name),
         tmpl: '',
-        offsetFromRoot: offsetFromRoot(options.projectRoot)
+        offsetFromRoot: offsetFromRoot(options.projectRoot),
       }),
       move(options.projectRoot),
       options.unitTestRunner === 'none'
-        ? filter(file => !file.endsWith('spec.ts'))
+        ? filter((file) => !file.endsWith('spec.ts'))
         : noop(),
-      options.publishable
+      options.publishable || options.buildable
         ? noop()
-        : filter(file => !file.endsWith('package.json'))
+        : filter((file) => !file.endsWith('package.json')),
     ]),
     MergeStrategy.Overwrite
   );
 }
 
-function updateTsConfig(options: NormalizedSchema): Rule {
-  if (options.unitTestRunner === 'none') {
-    return noop();
-  }
-
-  return (host: Tree, context: SchematicContext) => {
-    const projectConfig = getProjectConfig(host, options.name);
-    return updateJsonInTree(`${projectConfig.root}/tsconfig.json`, json => {
-      json.compilerOptions.types.push('jest');
-      return json;
-    });
-  };
-}
-
 function addProject(options: NormalizedSchema): Rule {
-  if (!options.publishable) {
+  if (!options.publishable && !options.buildable) {
     return noop();
   }
 
-  return updateWorkspaceInTree(json => {
+  return updateWorkspaceInTree((json, context, host) => {
     const architect = json.projects[options.name].architect;
     if (architect) {
       architect.build = {
         builder: '@nrwl/node:package',
         options: {
-          outputPath: `dist/libs/${options.projectDirectory}`,
+          outputPath: `dist/${libsDir(host)}/${options.projectDirectory}`,
           tsConfig: `${options.projectRoot}/tsconfig.lib.json`,
           packageJson: `${options.projectRoot}/package.json`,
           main: `${options.projectRoot}/src/index.ts`,
-          assets: [`${options.projectRoot}/**/*.md`]
-        }
+          assets: [`${options.projectRoot}/*.md`],
+        },
       };
     }
     return json;

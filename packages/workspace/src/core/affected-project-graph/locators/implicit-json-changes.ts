@@ -2,7 +2,7 @@ import { WholeFileChange } from '../../file-utils';
 import {
   isJsonChange,
   JsonChange,
-  walkJsonTree
+  walkJsonTree,
 } from '../../../utils/json-diff';
 import { TouchedProjectLocator } from '../affected-project-graph-models';
 import { ImplicitDependencyEntry } from '../../shared-interfaces';
@@ -25,13 +25,13 @@ export const getImplicitlyTouchedProjectsByJsonChanges: TouchedProjectLocator<
         if (isJsonChange(c)) {
           const projects =
             getTouchedProjects(c.path, implicitDependencies[f.file]) || [];
-          projects.forEach(p => touched.push(p));
+          projects.forEach((p) => touched.push(p));
         } else {
           const projects = getTouchedProjectsByJsonFile(
             implicitDependencies,
             f.file
           );
-          projects.forEach(p => touched.push(p));
+          projects.forEach((p) => touched.push(p));
         }
       }
     }
@@ -65,5 +65,5 @@ function getTouchedProjects(path: string[], implicitDependencyConfig: any) {
       break;
     }
   }
-  return found ? curr : [];
+  return found && Array.isArray(curr) ? curr : [];
 }

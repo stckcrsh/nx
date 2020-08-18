@@ -2,14 +2,21 @@ import * as fs from 'fs';
 
 import { WorkspaceResults } from './workspace-results';
 import { serializeJson } from '../utils/fileutils';
-import { stripIndents } from '@angular-devkit/core/src/utils/literals';
-import { output } from '../utils/output';
+import { ProjectType } from '../core/project-graph';
 
 describe('WorkspacesResults', () => {
   let results: WorkspaceResults;
 
   beforeEach(() => {
-    results = new WorkspaceResults('test');
+    results = new WorkspaceResults('test', {
+      proj: {
+        name: 'proj',
+        type: ProjectType.app,
+        data: {
+          files: [],
+        },
+      },
+    });
   });
 
   it('should be instantiable', () => {
@@ -36,7 +43,7 @@ describe('WorkspacesResults', () => {
       results.saveResults();
 
       expect(fs.writeSync).not.toHaveBeenCalled();
-      expect(fs.unlinkSync).toHaveBeenCalledWith('dist/.nx-results');
+      expect(fs.unlinkSync).toHaveBeenCalled();
     });
   });
 
@@ -45,23 +52,6 @@ describe('WorkspacesResults', () => {
       results.setResult('proj', false);
 
       expect(results.getResult('proj')).toBe(false);
-    });
-
-    it('should save results to file system', () => {
-      spyOn(fs, 'writeFileSync');
-
-      results.setResult('proj', false);
-      results.saveResults();
-
-      expect(fs.writeFileSync).toHaveBeenCalledWith(
-        'dist/.nx-results',
-        serializeJson({
-          command: 'test',
-          results: {
-            proj: false
-          }
-        })
-      );
     });
   });
 
@@ -75,14 +65,21 @@ describe('WorkspacesResults', () => {
         serializeJson({
           command: 'test',
           results: {
-            proj: false
-          }
+            proj: false,
+          },
         })
       );
 
-      results = new WorkspaceResults('test');
+      results = new WorkspaceResults('test', {
+        proj: {
+          name: 'proj',
+          type: ProjectType.app,
+          data: {
+            files: [],
+          },
+        },
+      });
 
-      expect(fs.readFileSync).toHaveBeenCalledWith('dist/.nx-results', 'utf-8');
       expect(results.getResult('proj')).toBe(false);
     });
 
@@ -90,7 +87,15 @@ describe('WorkspacesResults', () => {
       spyOn(fs, 'readFileSync').and.returnValue('invalid json');
 
       const runTests = () => {
-        results = new WorkspaceResults('test');
+        results = new WorkspaceResults('test', {
+          proj: {
+            name: 'proj',
+            type: ProjectType.app,
+            data: {
+              files: [],
+            },
+          },
+        });
       };
 
       expect(runTests).not.toThrow();
@@ -102,14 +107,46 @@ describe('WorkspacesResults', () => {
         serializeJson({
           command: 'test',
           results: {
-            proj: false
-          }
+            proj: false,
+          },
         })
       );
 
-      results = new WorkspaceResults('build');
+      results = new WorkspaceResults('build', {
+        proj: {
+          name: 'proj',
+          type: ProjectType.app,
+          data: {
+            files: [],
+          },
+        },
+      });
 
       expect(results.getResult('proj')).toBeUndefined();
+    });
+
+    it('should invalidate existing results when the project is not run', () => {
+      spyOn(fs, 'readFileSync').and.returnValue(
+        serializeJson({
+          command: 'test',
+          results: {
+            proj: true,
+            proj2: false,
+          },
+        })
+      );
+
+      results = new WorkspaceResults('build', {
+        proj: {
+          name: 'proj',
+          type: ProjectType.app,
+          data: {
+            files: [],
+          },
+        },
+      });
+
+      expect(results.hasFailure).toEqual(false);
     });
   });
 });

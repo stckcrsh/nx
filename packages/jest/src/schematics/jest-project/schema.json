@@ -32,6 +32,18 @@
       "type": "boolean",
       "description": "Setup tsx support",
       "default": false
+    },
+    "testEnvironment": {
+      "type": "string",
+      "enum": ["jsdom", "node"],
+      "description": "The test environment for jest",
+      "default": "jsdom"
+    },
+    "babelJest": {
+      "type": "boolean",
+      "alias": "babel-jest",
+      "description": "Use babel-jest instead of ts-jest",
+      "default": false
     }
   },
   "required": []

@@ -1,12 +1,40 @@
 import { join } from 'path';
 import { SchematicTestRunner } from '@angular-devkit/schematics/testing';
-import { Tree, Rule, externalSchematic } from '@angular-devkit/schematics';
+import { Rule, Tree } from '@angular-devkit/schematics';
 import { names, toFileName } from '@nrwl/workspace/src/utils/name-utils';
-import { createEmptyWorkspace } from '@nrwl/workspace/testing';
+import { MockBuilderContext } from '@nrwl/workspace/testing';
+import { TestingArchitectHost } from '@angular-devkit/architect/testing';
+import { schema } from '@angular-devkit/core';
+import { Architect } from '@angular-devkit/architect';
 
 const testRunner = new SchematicTestRunner(
   '@nrwl/angular',
   join(__dirname, '../../collection.json')
+);
+
+testRunner.registerCollection(
+  '@nrwl/jest',
+  join(__dirname, '../../../jest/collection.json')
+);
+
+testRunner.registerCollection(
+  '@nrwl/workspace',
+  join(__dirname, '../../../workspace/collection.json')
+);
+
+testRunner.registerCollection(
+  '@nrwl/cypress',
+  join(__dirname, '../../../cypress/collection.json')
+);
+
+testRunner.registerCollection(
+  '@nrwl/storybook',
+  join(__dirname, '../../../storybook/collection.json')
+);
+
+const migrationTestRunner = new SchematicTestRunner(
+  '@nrwl/workspace',
+  join(__dirname, '../../migrations.json')
 );
 
 export function runSchematic<SchemaOptions = any>(
@@ -15,6 +43,16 @@ export function runSchematic<SchemaOptions = any>(
   tree: Tree
 ) {
   return testRunner.runSchematicAsync(schematicName, options, tree).toPromise();
+}
+
+export function runMigration<SchemaOptions = any>(
+  schematicName: string,
+  options: SchemaOptions,
+  tree: Tree
+) {
+  return migrationTestRunner
+    .runSchematicAsync(schematicName, options, tree)
+    .toPromise();
 }
 
 export function runExternalSchematic<SchemaOptions = any>(
@@ -61,7 +99,7 @@ export function createApp(
   // save for getAppDir() lookup by external *.spec.ts tests
   appConfig = {
     appName,
-    appModule: `/apps/${appName}/src/app/app.module.ts`
+    appModule: `/apps/${appName}/src/app/app.module.ts`,
   };
 
   tree.create(
@@ -100,13 +138,13 @@ export function createApp(
   tree.create(
     `/apps/${appName}/tsconfig.app.json`,
     JSON.stringify({
-      include: ['**/*.ts']
+      include: ['**/*.ts'],
     })
   );
   tree.create(
     `/apps/${appName}-e2e/tsconfig.e2e.json`,
     JSON.stringify({
-      include: ['../**/*.ts']
+      include: ['../**/*.ts'],
     })
   );
   tree.overwrite(
@@ -121,15 +159,15 @@ export function createApp(
           architect: {
             build: {
               options: {
-                main: `apps/${appName}/src/main.ts`
-              }
+                main: `apps/${appName}/src/main.ts`,
+              },
             },
             serve: {
-              options: {}
-            }
-          }
-        }
-      }
+              options: {},
+            },
+          },
+        },
+      },
     })
   );
   return tree;
@@ -141,7 +179,7 @@ export function createLib(tree: Tree, libName: string): Tree {
   libConfig = {
     name,
     module: `/libs/${propertyName}/src/lib/${fileName}.module.ts`,
-    barrel: `/libs/${propertyName}/src/index.ts`
+    barrel: `/libs/${propertyName}/src/index.ts`,
   };
 
   tree.create(
@@ -165,4 +203,24 @@ export function createLib(tree: Tree, libName: string): Tree {
   `
   );
   return tree;
+}
+
+export async function getTestArchitect() {
+  const architectHost = new TestingArchitectHost('/root', '/root');
+  const registry = new schema.CoreSchemaRegistry();
+  registry.addPostTransform(schema.transforms.addUndefinedDefaults);
+
+  const architect = new Architect(architectHost, registry);
+
+  await architectHost.addBuilderFromPackage(join(__dirname, '../..'));
+
+  return [architect, architectHost] as [Architect, TestingArchitectHost];
+}
+
+export async function getMockContext() {
+  const [architect, architectHost] = await getTestArchitect();
+
+  const context = new MockBuilderContext(architect, architectHost);
+  await context.addBuilderFromPackage(join(__dirname, '../..'));
+  return context;
 }
